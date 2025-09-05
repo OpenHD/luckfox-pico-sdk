@@ -148,11 +148,18 @@ post_chk() {
 		fi
 	fi
 
-	if [ -d "/oem/usr/share/iqfiles" ]; then
-		rkipc -a /oem/usr/share/iqfiles &
-	else
-		rkipc &
-	fi
+	#if [ -d "/oem/usr/share/iqfiles" ]; then
+	#	rkipc -a /oem/usr/share/iqfiles &
+	#else
+	#	rkipc &
+	#fi
+	LOG_FILE="/var/log/openhd.log"
+	COMMAND="openhd"
+	PID_FILE="/var/run/openhd.pid"
+	nohup $COMMAND >> "$LOG_FILE" 2>&1 &
+    	echo $! > "$PID_FILE"
+
+    	echo "OpenHD started successfully with PID $(cat $PID_FILE)!" | tee -a "$LOG_FILE"
 }
 
 rcS
