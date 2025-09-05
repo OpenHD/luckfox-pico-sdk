@@ -1449,6 +1449,65 @@ function __PACKAGE_RESOURCES() {
 function __MAKE_MOUNT_SCRIPT() {
 	echo "$1" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
 }
+function add_ohd_mount() {	 
+cat >>"$RK_PROJECT_FILE_ROOTFS_SCRIPT" <<'SH'
+ohd_init() {
+	# --- OHD partitions: first-boot init + mounts ---
+	CFG_DEV=/dev/block/by-name/ohd_config
+	REC_DEV=/dev/block/by-name/recordings
+	SWP_DEV=/dev/block/by-name/swap
+
+	#create mountpoints
+	[ -d /config ] || mkdir -p /config
+	[ -d /Videos ] || mkdir -p /Videos
+
+	if [ -b "$CFG_DEV" ] && ! mountpoint -q /config; then
+	    mount -t auto "$CFG_DEV" /config 2>/dev/null || true
+	fi
+
+	FIRST_BOOT=0
+	if mountpoint -q /config; then
+	    [ -e /config/.config ] || FIRST_BOOT=1
+	fi
+
+        mkswap -L SWAP "$SWP_DEV" || true
+
+	if [ "$FIRST_BOOT" -eq 1 ]; then
+
+	    #drow RECORDINGS filesystem/partition to fill partition
+	    if [ -b "$REC_DEV" ]; then
+		# Expand GPT to whole disk
+		sgdisk -e /dev/mmcblk1
+                sgdisk -p /dev/mmcblk1
+		START=$(sgdisk -i 7 /dev/mmcblk1 | awk '/First sector:/ {print $3}')
+		sgdisk -d 7 /dev/mmcblk1 -n 7:${START}:0 -c 7:"RECORDINGS" -t 7:0700 /dev/mmcblk1
+	        sleep 2
+		partx -u /dev/mmcblk1
+		sleep 2
+        	yes | mkfs.msdos -F 32 "$REC_DEV"
+		sgdisk -p /dev/mmcblk1
+		mount -t auto "$REC_DEV" /Videos
+		touch /Videos/external_video_part.txt
+	    fi
+
+	    # Drop the first-boot marker
+	    touch /config/.config
+	    reboot
+	fi
+
+	# Mount recordings
+	if [ -b "$REC_DEV" ] && ! mountpoint -q /Videos; then
+	    mount -t auto "$REC_DEV" /Videos
+	fi
+
+	# Enable swap
+	if [ -b "$SWP_DEV" ]; then
+	    swapon "$SWP_DEV"
+	fi
+}
+SH
+}
+
 
 function __PACKAGE_OEM() {
 	mkdir -p $RK_PROJECT_PACKAGE_OEM_DIR
@@ -1742,93 +1801,141 @@ function parse_partition_file() {
 	mkdir -p $(dirname $RK_PROJECT_FILE_ROOTFS_SCRIPT)
 	echo "#!/bin/sh" >$RK_PROJECT_FILE_ROOTFS_SCRIPT
 	echo "bootmedium=$RK_BOOT_MEDIUM" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-	echo "linkdev(){" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-	echo 'if [ ! -d "/dev/block/by-name" ];then' >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-	echo "mkdir -p /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-	echo "cd /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
+#	echo "linkdev(){" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
+#	echo 'if [ ! -d "/dev/block/by-name" ];then' >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
+#	echo "mkdir -p /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
+#	echo "cd /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
 
-	SYS_BOOTARGS="sys_bootargs="
-	IFS=,
-	for part in $GLOBAL_PARTITIONS; do
-		part_size=$(echo $part | cut -d '@' -f1)
-		part_offset=$(echo $part | cut -d '(' -f1 | cut -d '@' -f2)
-		part_name=$(echo $part | cut -d '(' -f2 | cut -d ')' -f1)
+#	SYS_BOOTARGS="sys_bootargs="
+#	IFS=,
+#	for part in $GLOBAL_PARTITIONS; do
+#		part_size=$(echo $part | cut -d '@' -f1)
+#		part_offset=$(echo $part | cut -d '(' -f1 | cut -d '@' -f2)
+#		part_name=$(echo $part | cut -d '(' -f2 | cut -d ')' -f1)
+#
+#		if [[ $part_size =~ "-" ]]; then
+#			part_name=${part_name%%:*}
+#		fi
+#
+#		if [[ $part_name == "env" ]]; then
+#			export ENV_SIZE="$part_size"
+#			export ENV_OFFSET="$part_offset"
+#		fi
+#
+#		if [[ $part_name == "meta" ]]; then
+#			if [ -n "$RK_META_SIZE" ]; then
+#				msg_info "RK_META_SIZE is $RK_META_SIZE"
+#			else
+#				export RK_META_SIZE="$part_size"
+#			fi
+#		fi
+#
+#		if [[ ${part_name%_[a]} == "rootfs" || ${part_name%_[a]} == "system" ]]; then
+#			case $RK_BOOT_MEDIUM in
+#			emmc)
+#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+#				else
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
+#				fi
+#				;;
+#			sd_card)
+#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+#				else
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
+#				fi
+#				;;
+#			spi_nor)
+#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+#				else
+#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mtdblock${part_num}"
+#				fi
+#				;;
+#			spi_nand | slc_nand)
+#				SYS_BOOTARGS="${SYS_BOOTARGS} ubi.mtd=${part_num}"
+#				;;
+#			*)
+#				msg_error "Not support storage medium type: $RK_BOOT_MEDIUM"
+#				finish_build
+#				exit 1
+#				;;
+#			esac
+#		fi
+#
+#		echo "ln -sf /dev/${storage_dev_prefix}${part_num} ${part_name}" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
+#		part_num=$((part_num + 1))
+#	done
+#	case $RK_BOOT_MEDIUM in
+#	sd_card)
+#		cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<EOF
+#for i in \$(seq 5 8); do
+#	det_partition="/dev/mmcblk1p\$i"
+#	mount_point=\$(mount | grep "\$det_partition" | awk '{print \$3}')
+#	if [ -n "\$mount_point" ]; then
+#	echo "Unmounting : \$det_partition (\$mount_point)"
+#	umount "\$det_partition"
+#	else
+#	echo "Partition is not mounted: \$det_partition"
+#	fi
+#done
+#EOF
+#		;;
+#	*) ;;
+#	esac
+#	IFS=
+#	echo "fi }" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
 
-		if [[ $part_size =~ "-" ]]; then
-			part_name=${part_name%%:*}
-		fi
+	cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<'EOF'
+linkdev() {
+    DEVBASE="${1:-/dev/mmcblk1}"
+    DEVBLK="$(basename "$DEVBASE")"
+    BYNAME="/dev/block/by-name"
 
-		if [[ $part_name == "env" ]]; then
-			export ENV_SIZE="$part_size"
-			export ENV_OFFSET="$part_offset"
-		fi
+    # Ensure target dir exists
+    [ -d "$BYNAME" ] || mkdir -p "$BYNAME"
 
-		if [[ $part_name == "meta" ]]; then
-			if [ -n "$RK_META_SIZE" ]; then
-				msg_info "RK_META_SIZE is $RK_META_SIZE"
-			else
-				export RK_META_SIZE="$part_size"
-			fi
-		fi
+    # Create by-name links from GPT PARTNAME exposed by the kernel in sysfs
+    for SYS in /sys/class/block/"$DEVBLK"p*; do
+        [ -e "$SYS" ] || continue
+        PART="$(basename "$SYS")"             # e.g. mmcblk1p5
+        NODE="/dev/$PART"
 
-		if [[ ${part_name%_[a]} == "rootfs" || ${part_name%_[a]} == "system" ]]; then
-			case $RK_BOOT_MEDIUM in
-			emmc)
-				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-				else
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mmcblk0p${part_num}"
-				fi
-				;;
-			sd_card)
-				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-				else
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mmcblk1p${part_num}"
-				fi
-				;;
-			spi_nor)
-				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-				else
-					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mtdblock${part_num}"
-				fi
-				;;
-			spi_nand | slc_nand)
-				SYS_BOOTARGS="${SYS_BOOTARGS} ubi.mtd=${part_num}"
-				;;
-			*)
-				msg_error "Not support storage medium type: $RK_BOOT_MEDIUM"
-				finish_build
-				exit 1
-				;;
-			esac
-		fi
+        # Read PARTNAME from uevent (works without udev)
+        NAME="$(sed -n 's/^PARTNAME=\(.*\)$/\1/p' "$SYS/uevent")"
+        [ -n "$NAME" ] || NAME="$PART"
 
-		echo "ln -sf /dev/${storage_dev_prefix}${part_num} ${part_name}" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-		part_num=$((part_num + 1))
-	done
-	case $RK_BOOT_MEDIUM in
-	sd_card)
-		cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<EOF
-for i in \$(seq 5 8); do
-	det_partition="/dev/mmcblk1p\$i"
-	mount_point=\$(mount | grep "\$det_partition" | awk '{print \$3}')
-	if [ -n "\$mount_point" ]; then
-	echo "Unmounting : \$det_partition (\$mount_point)"
-	umount "\$det_partition"
-	else
-	echo "Partition is not mounted: \$det_partition"
-	fi
-done
+        # Sanitize: lowercase, spaces/slashes -> underscores
+        SAFE_NAME="$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' /' '__')"
+
+        ln -sf "$NODE" "$BYNAME/$SAFE_NAME"
+    done
+
+    # Partitions to consider for unmounting (by GPT name, sanitized like above)
+    # adjust this list to your platform
+    TO_UMOUNT="oem userdata rootfs ohd_config swap recordings"
+
+    for PNAME in $TO_UMOUNT; do
+        LINK="$BYNAME/$PNAME"
+        [ -L "$LINK" ] || continue
+
+        # Prefer exact device node if available, but also match the symlink itself
+        DEVNODE="$LINK"
+        # Find mountpoint from /proc/mounts (BusyBox-friendly)
+        MP="$(awk -v d="$DEVNODE" '$1==d {print $2}' /proc/mounts)"
+        [ -n "$MP" ] || MP="$(awk -v s="$LINK" '$1==s {print $2}' /proc/mounts)"
+
+        if [ -n "$MP" ]; then
+            echo "Unmounting: $DEVNODE ($MP)"
+            umount "$DEVNODE" 2>/dev/null || umount "$MP"
+        else
+            echo "Partition is not mounted: $DEVNODE"
+        fi
+    done
+}
 EOF
-		;;
-	*) ;;
-	esac
-	IFS=
-	echo "fi }" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-
-	cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<EOF
+	cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT << EOF
 mount_part(){
 if [ -z "\$1" -o -z "\$2" -o -z "\$3" ];then
 	echo "Invalid paramter, exit !!!"
@@ -2049,7 +2156,8 @@ function get_partition_size() {
 function __GET_TARGET_PARTITION_FS_TYPE() {
 	check_config RK_PARTITION_FS_TYPE_CFG || return 0
 	msg_info "Partition Filesystem Type Configure: $RK_PARTITION_FS_TYPE_CFG"
-	__MAKE_MOUNT_SCRIPT "case "\$1" in start) linkdev;"
+	add_ohd_mount
+	__MAKE_MOUNT_SCRIPT "case "\$1" in start) linkdev; ohd_init;"
 
 	if [ "$RK_ENABLE_RECOVERY" = "y" ]; then
 		mkdir -p $(dirname $RK_PROJECT_FILE_RECOVERY_SCRIPT)
