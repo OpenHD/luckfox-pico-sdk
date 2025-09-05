@@ -194,7 +194,7 @@ ifeq ($(SYSDRV_ROOTFS_FS_TYPE),)
 SYSDRV_ROOTFS_FS_TYPE := ext4
 endif
 KERNEL_CMDLINE_FRAGMENT += rootfstype=$(SYSDRV_ROOTFS_FS_TYPE) \
-						   root=/dev/mmcblk1p$(ROOTFS_PART_NUM)
+						   root=PARTLABEL=rootfs
 endif
 
 ifeq ($(BOOT_MEDIUM), spi_nor)
@@ -795,7 +795,7 @@ endif
 ifeq ($(BOOT_MEDIUM),sd_card)
 	@echo "blkdevparts=mmcblk1:$(CONFIG_SYSDRV_PARTITION)" > $(SYSDRV_UBOOT_ENV_CFG_FILE)
 	@test "$(ROOTFS_PART_NUM)" = "FAIL" || \
-		echo "sys_bootargs=root=/dev/mmcblk1p$(ROOTFS_PART_NUM)" >> $(SYSDRV_UBOOT_ENV_CFG_FILE)
+		echo "sys_bootargs=root=PARTLABEL=rootfs" >> $(SYSDRV_UBOOT_ENV_CFG_FILE)
 endif
 ifeq ($(BOOT_MEDIUM),spi_nor)
 	@echo "mtdparts=sfc_nor:$(CONFIG_SYSDRV_PARTITION)" > $(SYSDRV_UBOOT_ENV_CFG_FILE)
