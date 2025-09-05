@@ -1,0 +1,9 @@
+[submodule "sysdrv/drv_ko/wifi/rtl8812au"]
+	path = sysdrv/drv_ko/wifi/rtl8812au
+	url = https://github.com/OpenHD/rtl8812au
+[submodule "sysdrv/drv_ko/wifi/rtl88x2bu"]
+	path = sysdrv/drv_ko/wifi/rtl88x2bu
+	url = https://github.com/OpenHD/rtl88x2bu
+[submodule "sysdrv/drv_ko/wifi/rtl88x2eu"]
+	path = sysdrv/drv_ko/wifi/rtl88x2eu
+	url = https://github.com/OpenHD/rtl88x2eu
