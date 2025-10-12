@@ -1,8 +1,8 @@
 {
 	"sensor_calib":	{
 		"resolution":	{
-			"width":	2592,
-			"height":	1944
+			"width":	1296,
+			"height":	972
 		},
 		"Gain2Reg":	{
 			"GainMode":	"EXPGAIN_MODE_LINEAR",
@@ -173,7 +173,7 @@
 								},
 								"AecFrameRateMode":	{
 									"isFpsFix":	0,
-									"FpsValue":	30
+									"FpsValue":	100
 								},
 								"AecAntiFlicker":	{
 									"enable":	1,
@@ -2047,7 +2047,7 @@
 						},
 						"lsc_v2":	{
 							"common":	{
-								"enable":	1,
+								"enable":	0,
 								"resolutionAll":	[{
 										"name":	"2592x1944",
 										"lsc_sect_size_x":	[162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162, 162],

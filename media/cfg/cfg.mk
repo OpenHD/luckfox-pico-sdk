@@ -22,11 +22,11 @@ export CONFIG_RK_MPP_TESTS=y
 # Rockchip's RKAIQ(Rockchip Auto Image Quality)
 #
 # Enable RKAIQ Build
-export CONFIG_RK_RKAIQ=y
+export CONFIG_RK_RKAIQ=n
 # ISP Hardware version
-export CONFIG_RK_ISP_HW_VERSION_V32=y
+export CONFIG_RK_ISP_HW_VERSION_V32=n
 # ISP build demo
-export CONFIG_RK_ISP_BUILD_DEMO=y
+export CONFIG_RK_ISP_BUILD_DEMO=n
 
 #------------------------------------------------
 # Rockchip's RGA2 (Raster Graphic Acceleration)
@@ -40,7 +40,7 @@ export CONFIG_RK_RGA2_USE_LIBDRM=n
 # Rockchip's common algorithm
 #
 # Enable common_algorithm Build
-export CONFIG_RK_COMMON_ALGORITHM=y
+export CONFIG_RK_COMMON_ALGORITHM=n
 
 #------------------------------------------------
 # Rockchip's rockit
@@ -52,13 +52,13 @@ export CONFIG_RK_ROCKIT=y
 # Rockchip's iva
 #
 # Enable iva Build
-export CONFIG_RK_IVA=y
+export CONFIG_RK_IVA=n
 
 #------------------------------------------------
 # Rockchip's ive
 #
 # Enable ive Build
-export CONFIG_RK_IVE=y
+export CONFIG_RK_IVE=n
 
 #------------------------------------------------
 # Rockchip's hardware crypto
@@ -67,19 +67,19 @@ export CONFIG_RK_IVE=y
 export CONFIG_RK_CRYPTO=n
 
 # Enable alsa-lib
-# export CONFIG_ALSA_LIB=y
+export CONFIG_ALSA_LIB=y
 
 # Enable libv4l
-# export CONFIG_LIBV4L=y
+export CONFIG_LIBV4L=y
 
 ##------------------------------------------------
 # Rockchip's avs
 #
 # Enable avs Build
-export CONFIG_RK_AVS=y
+export CONFIG_RK_AVS=n
 
 #------------------------------------------------
 # Rockchip's auto
 #
 # Enable auto Build
-export CONFIG_RK_ROCKAUTO=y
+export CONFIG_RK_ROCKAUTO=n
