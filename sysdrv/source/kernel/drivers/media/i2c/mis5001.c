@@ -178,24 +178,25 @@ static const struct regval mis5001_linear_10_2592x1944_regs[] = {
 	{0x3006, 0x02},
 	{REG_DELAY, 0x2d},
 	{0x3307, 0x84},
-	{0x310f, 0xb8},
-	{0x310e, 0x0b},
+	{0x310f, 0x00},
+	{0x310e, 0x06},
 	{0x4220, 0x2b},
 	{0x4221, 0x6b},
 	{0x4222, 0xab},
 	{0x4223, 0xeb},
 	{0x3011, 0x2b},
 	{0x3302, 0x02},
-	{0x310d, 0xbc},
-	{0x310c, 0x07},
+	{0x310d, 0xe8},
+	{0x310c, 0x03},
 	{0x3115, 0x00},
 	{0x3114, 0x00},
 	{0x3117, 0x1f},
 	{0x3116, 0x0a},
 	{0x3111, 0x00},
 	{0x3110, 0x00},
-	{0x3113, 0x99},
+	{0x3113, 0x93},
 	{0x3112, 0x07},
+	{0x3013, 0x03},
 	{0x3128, 0x0f}, //FW<4096 FFF
 	{0x3129, 0xff},
 	{0x3012, 0x03},
@@ -296,10 +297,10 @@ static const struct regval mis5001_linear_10_2592x1944_regs[] = {
 	{0x4218, 0x02},
 	{0x4240, 0x8d},
 	{0x4242, 0x03},
-	{0x4224, 0x20},
-	{0x4225, 0x0a},
-	{0x4226, 0x98},
-	{0x4227, 0x07},
+	{0x4224, 0x10},
+	{0x4225, 0x05},
+	{0x4226, 0xC8},
+	{0x4227, 0x03},
 	{0x4228, 0x20},
 	{0x4229, 0x0a},
 	{0x422a, 0x98},
@@ -345,11 +346,11 @@ static const struct regval mis5001_linear_10_2592x1944_regs[] = {
 	{0x4005, 0x30},
 	{0x4009, 0x09},
 	{0x400a, 0x48},
-	{0x4006, 0x86}, 
+	{0x4006, 0x86},
 	{0x4019, 0x08},
 	{0x401b, 0x00},
-	{0x3f42, 0x58}, 
-	{0x3f49, 0x60}, 
+	{0x3f42, 0x58},
+	{0x3f49, 0x60},
 	{0x3f38, 0x38},
 	{0x3006, 0x00},
 	{REG_NULL, 0x00},
@@ -357,15 +358,15 @@ static const struct regval mis5001_linear_10_2592x1944_regs[] = {
 
 static const struct mis5001_mode supported_modes[] = {
 	{
-		.width = 2592,
-		.height = 1944,
+		.width = 1296,
+		.height = 968,
 		.max_fps = {
 			.numerator = 10000,
-			.denominator = 300000,
+			.denominator = 1000000,
 		},
-		.exp_def = 0x0040,
-		.hts_def = 0xbb8,
-		.vts_def = 0x7bc,
+		.exp_def = 0x0020,
+		.hts_def = 0x600,
+		.vts_def = 0x3e8,
 		.bus_fmt = MEDIA_BUS_FMT_SGRBG10_1X10,
 		.reg_list = mis5001_linear_10_2592x1944_regs,
 		.hdr_mode = NO_HDR,
@@ -763,7 +764,6 @@ static int mis5001_g_frame_interval(struct v4l2_subdev *sd,
 {
 	struct mis5001 *mis5001 = to_mis5001(sd);
 	const struct mis5001_mode *mode = mis5001->cur_mode;
-
 	if (mis5001->streaming)
 		fi->interval = mis5001->cur_fps;
 	else
@@ -1222,13 +1222,13 @@ static const struct v4l2_subdev_ops mis5001_subdev_ops = {
 	.pad	= &mis5001_pad_ops,
 };
 
-static void mis5001_modify_fps_info(struct mis5001 *mis5001)
+/*static void mis5001_modify_fps_info(struct mis5001 *mis5001)
 {
 	const struct mis5001_mode *mode = mis5001->cur_mode;
 
 	mis5001->cur_fps.denominator = mode->max_fps.denominator * mode->vts_def /
 				      mis5001->cur_vts;
-}
+}*/
 
 static int mis5001_set_ctrl(struct v4l2_ctrl *ctrl)
 {
@@ -1239,7 +1239,7 @@ static int mis5001_set_ctrl(struct v4l2_ctrl *ctrl)
 	int ret = 0;
 	u32 val = 0;
 	u32 u32Reg0x4007, expmin, expmax;
-	u64 sleep_time = 0;
+	//u64 sleep_time = 0;
 
 	/* Propagate change of current control to all related controls */
 	switch (ctrl->id) {
@@ -1261,6 +1261,10 @@ static int mis5001_set_ctrl(struct v4l2_ctrl *ctrl)
 		dev_dbg(&(mis5001->client->dev), KERN_EMERG "set exposure 0x%x\n", ctrl->val);
 		if (mis5001->cur_mode->hdr_mode == NO_HDR) {
 			val = ctrl->val;
+			// According to datasheet 6.2.2 maximum exp_0 value is vts-4
+			if(val > mis5001->cur_mode->vts_def - 4)
+				val = mis5001->cur_mode->vts_def - 4;
+
 			/* 4 least significant bits of expsoure are fractional part */
 			ret = mis5001_write_reg(mis5001->client,
 						MIS5001_REG_EXPOSURE_H,
@@ -1298,7 +1302,7 @@ static int mis5001_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_VBLANK:
 		dev_dbg(&client->dev, "set vblank 0x%x\n", ctrl->val);
-		mis5001->cur_vts = ctrl->val + mis5001->cur_mode->height;
+	/*	mis5001->cur_vts = ctrl->val + mis5001->cur_mode->height;
 		ret = mis5001_write_reg(mis5001->client,
 					MIS5001_REG_CTRL_MODE,
 					MIS5001_REG_VALUE_08BIT,
@@ -1321,8 +1325,9 @@ static int mis5001_set_ctrl(struct v4l2_ctrl *ctrl)
 					 MIS5001_REG_CTRL_MODE,
 					 MIS5001_REG_VALUE_08BIT,
 					 0x00);
+		printk("Set VTS to: %d\n", ctrl->val + mis5001->cur_mode->height);
 		if (mis5001->cur_vts != mis5001->cur_mode->vts_def)
-			mis5001_modify_fps_info(mis5001);
+			mis5001_modify_fps_info(mis5001);*/
 		break;
 	case V4L2_CID_TEST_PATTERN:
 		ret = mis5001_enable_test_pattern(mis5001, ctrl->val);
