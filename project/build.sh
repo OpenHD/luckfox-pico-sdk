@@ -122,18 +122,21 @@ function finish_build() {
 	cd $PROJECT_TOP_DIR
 }
 
-function check_config() {
-	unset missing
-	for var in $@; do
-		eval [ \$$var ] && continue
+check_config() {
+    missing=
+    for var in "$@"; do
+        eval "val=\${$var-}"
+        if [ -n "$val" ]; then
+            continue
+        fi
+        missing="$missing $var"
+    done
 
-		missing="$missing $var"
-	done
-
-	[ -z "$missing" ] && return 0
-
-	msg_info "Skipping ${FUNCNAME[1]} for missing configs: $missing."
-	return 1
+    if [ -n "$missing" ]; then
+        msg_info "Skipping ${FUNCNAME[1]:-build_firmware} for missing configs:$missing."
+        return 1
+    fi
+    return 0
 }
 
 function __IS_IN_ARRAY() {
@@ -962,7 +965,7 @@ function build_recovery() {
 		-o ! -f $RK_PROJECT_PATH_PC_TOOLS/mkimage ]; then
 		build_tool
 	fi
-	cp -fa $PROJECT_TOP_DIR/scripts/RkLunch-recovery.sh $RK_PROJECT_PATH_RAMDISK_TINY_ROOTFS/usr/bin/RkLunch.sh
+	#cp -fa $PROJECT_TOP_DIR/scripts/RkLunch-recovery.sh $RK_PROJECT_PATH_RAMDISK_TINY_ROOTFS/usr/bin/RkLunch.sh
 	cp -fa $PROJECT_TOP_DIR/scripts/boot4recovery.its $RK_PROJECT_PATH_RAMDISK
 
 	mkdir -p $(dirname $RK_PROJECT_FILE_RECOVERY_LUNCH_SCRIPT)
@@ -970,10 +973,10 @@ function build_recovery() {
 #!/bin/sh
 case \$1 in
 	start)
-		sh /usr/bin/RkLunch.sh
+		#sh /usr/bin/RkLunch.sh
 		;;
 	stop)
-		sh /usr/bin/RkLunch-stop.sh
+		#sh /usr/bin/RkLunch-stop.sh
 		;;
 	*)
 		exit 1
@@ -1472,32 +1475,36 @@ ohd_init() {
 
         mkswap -L SWAP "$SWP_DEV" || true
 
+	if [ -b /dev/mmcblk1 ]; then
+		DISK="/dev/mmcblk1"
+	elif [ -b /dev/mmcblk0 ]; then
+		DISK="/dev/mmcblk0"
+	fi
 	if [ "$FIRST_BOOT" -eq 1 ]; then
 
 	    #drow RECORDINGS filesystem/partition to fill partition
 	    if [ -b "$REC_DEV" ]; then
 		# Expand GPT to whole disk
-		sgdisk -e /dev/mmcblk1
-                sgdisk -p /dev/mmcblk1
-		START=$(sgdisk -i 7 /dev/mmcblk1 | awk '/First sector:/ {print $3}')
-		sgdisk -d 7 /dev/mmcblk1 -n 7:${START}:0 -c 7:"RECORDINGS" -t 7:0700 /dev/mmcblk1
-	        sleep 2
-		partx -u /dev/mmcblk1
-		sleep 2
-        	yes | mkfs.msdos -F 32 "$REC_DEV"
-		sgdisk -p /dev/mmcblk1
-		mount -t auto "$REC_DEV" /Videos
-		touch /Videos/external_video_part.txt
+		mount
+		sgdisk -e "$DISK"
+                sgdisk -p "$DISK"
+		START=$(sgdisk -i 7 "$DISK" | awk '/First sector:/ {print $3}')
+		sgdisk -d 7 "$DISK" -n 7:${START}:0 -c 7:"RECORDINGS" -t 7:0700 "$DISK"
+		sleep 1
+		partx -u "$DISK"
+		sleep 1
+       	        yes | mkfs.msdos -F 32 "$REC_DEV"
 	    fi
 
 	    # Drop the first-boot marker
 	    touch /config/.config
-	    reboot
+	    #reboot
 	fi
 
 	# Mount recordings
 	if [ -b "$REC_DEV" ] && ! mountpoint -q /Videos; then
 	    mount -t auto "$REC_DEV" /Videos
+            touch /Videos/external_video_part.txt
 	fi
 
 	# Enable swap
@@ -1525,10 +1532,8 @@ function __PACKAGE_OEM() {
 [ -f /etc/profile.d/RkEnv.sh ] && source /etc/profile.d/RkEnv.sh
 case \$1 in
 	start)
-		sh /oem/usr/bin/RkLunch.sh
 		;;
 	stop)
-		sh /oem/usr/bin/RkLunch-stop.sh
 		;;
 	*)
 		exit 1
@@ -1806,67 +1811,67 @@ function parse_partition_file() {
 #	echo "mkdir -p /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
 #	echo "cd /dev/block/by-name" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
 
-#	SYS_BOOTARGS="sys_bootargs="
-#	IFS=,
-#	for part in $GLOBAL_PARTITIONS; do
-#		part_size=$(echo $part | cut -d '@' -f1)
-#		part_offset=$(echo $part | cut -d '(' -f1 | cut -d '@' -f2)
-#		part_name=$(echo $part | cut -d '(' -f2 | cut -d ')' -f1)
-#
-#		if [[ $part_size =~ "-" ]]; then
-#			part_name=${part_name%%:*}
-#		fi
-#
-#		if [[ $part_name == "env" ]]; then
-#			export ENV_SIZE="$part_size"
-#			export ENV_OFFSET="$part_offset"
-#		fi
-#
-#		if [[ $part_name == "meta" ]]; then
-#			if [ -n "$RK_META_SIZE" ]; then
-#				msg_info "RK_META_SIZE is $RK_META_SIZE"
-#			else
-#				export RK_META_SIZE="$part_size"
-#			fi
-#		fi
-#
-#		if [[ ${part_name%_[a]} == "rootfs" || ${part_name%_[a]} == "system" ]]; then
-#			case $RK_BOOT_MEDIUM in
-#			emmc)
-#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-#				else
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
-#				fi
-#				;;
-#			sd_card)
-#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-#				else
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
-#				fi
-#				;;
-#			spi_nor)
-#				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
-#				else
-#					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mtdblock${part_num}"
-#				fi
-#				;;
-#			spi_nand | slc_nand)
-#				SYS_BOOTARGS="${SYS_BOOTARGS} ubi.mtd=${part_num}"
-#				;;
-#			*)
-#				msg_error "Not support storage medium type: $RK_BOOT_MEDIUM"
-#				finish_build
-#				exit 1
-#				;;
-#			esac
-#		fi
-#
+	SYS_BOOTARGS="sys_bootargs="
+	IFS=,
+	for part in $GLOBAL_PARTITIONS; do
+		part_size=$(echo $part | cut -d '@' -f1)
+		part_offset=$(echo $part | cut -d '(' -f1 | cut -d '@' -f2)
+		part_name=$(echo $part | cut -d '(' -f2 | cut -d ')' -f1)
+
+		if [[ $part_size =~ "-" ]]; then
+			part_name=${part_name%%:*}
+		fi
+
+		if [[ $part_name == "env" ]]; then
+			export ENV_SIZE="$part_size"
+			export ENV_OFFSET="$part_offset"
+		fi
+
+		if [[ $part_name == "meta" ]]; then
+			if [ -n "$RK_META_SIZE" ]; then
+				msg_info "RK_META_SIZE is $RK_META_SIZE"
+			else
+				export RK_META_SIZE="$part_size"
+			fi
+		fi
+
+		if [[ ${part_name%_[a]} == "rootfs" || ${part_name%_[a]} == "system" ]]; then
+			case $RK_BOOT_MEDIUM in
+			emmc)
+				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+				else
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
+				fi
+				;;
+			sd_card)
+				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+				else
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=PARTLABEL=rootfs"
+				fi
+				;;
+			spi_nor)
+				if [ "$RK_ENABLE_FASTBOOT" = "y" -a "$RK_ENABLE_RAMDISK_PARTITION" = "y" ]; then
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/rd0"
+				else
+					SYS_BOOTARGS="${SYS_BOOTARGS} root=/dev/mtdblock${part_num}"
+				fi
+				;;
+			spi_nand | slc_nand)
+				SYS_BOOTARGS="${SYS_BOOTARGS} ubi.mtd=${part_num}"
+				;;
+			*)
+				msg_error "Not support storage medium type: $RK_BOOT_MEDIUM"
+				finish_build
+				exit 1
+				;;
+			esac
+		fi
+
 #		echo "ln -sf /dev/${storage_dev_prefix}${part_num} ${part_name}" >>$RK_PROJECT_FILE_ROOTFS_SCRIPT
-#		part_num=$((part_num + 1))
-#	done
+		part_num=$((part_num + 1))
+	done
 #	case $RK_BOOT_MEDIUM in
 #	sd_card)
 #		cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<EOF
@@ -2196,7 +2201,7 @@ function __GET_TARGET_PARTITION_FS_TYPE() {
 			export RK_PROJECT_ROOTFS_TYPE=$part_fs_type
 			case $RK_BOOT_MEDIUM in
 			emmc | sd_card)
-				SYS_BOOTARGS="$SYS_BOOTARGS rootfstype=$part_fs_type"
+				SYS_BOOTARGS="$SYS_BOOTARGS rootfstype=$part_fs_type root=PARTLABEL=rootfs "
 				;;
 			spi_nor)
 				SYS_BOOTARGS="$SYS_BOOTARGS rootfstype=$part_fs_type"
@@ -2255,9 +2260,9 @@ function __GET_TARGET_PARTITION_FS_TYPE() {
 }
 
 __GET_BOOTARGS_FROM_BOARD_CFG() {
-	if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
-		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=$RK_BOOTARGS_CMA_SIZE"
-	fi
+#	if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
+		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=20M"
+#	fi
 }
 
 __LINK_DEFCONFIG_FROM_BOARD_CFG() {
@@ -2600,7 +2605,11 @@ function __RUN_POST_BUILD_USERDATA_SCRIPT() {
 }
 
 function build_firmware() {
+	msg_info "============Start build_firmware: $RK_PARTITION_CMD_IN_ENV ============"
+
 	check_config RK_PARTITION_CMD_IN_ENV || return 0
+
+	msg_info "============Start build_firmware 1============"
 
 	build_env
 
