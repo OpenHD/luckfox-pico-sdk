@@ -28,7 +28,7 @@ OPENHD_SITE_METHOD = git
 OPENHD_GIT_SUBMODULES = YES
 
 # Set the version to the latest commit of the default branch
-OPENHD_VERSION = 2a0dde827aa160592c2238445ba3500db9208032
+OPENHD_VERSION = 0fd176d80497574ba91224a1239de6d0860ab0b8
 
 # Enable Git submodules if the project requires them
 OPENHD_GIT_SUBMODULES = YES
