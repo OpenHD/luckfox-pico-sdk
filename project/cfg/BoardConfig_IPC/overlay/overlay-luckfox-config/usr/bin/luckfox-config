@@ -3690,7 +3690,7 @@ function luckfox_rootfs_BACKUP() {
 		echo "XXX"
 		rsync -aX --exclude={"/oem","/userdata","/sys","/mnt","/tmp","/proc"} / "$MOUNT_POINT" >>"$LOG_FILE" 2>&1
 
-		mkdir -p  "$MOUNT_POINT/sys" "$MOUNT_POINT/mnt" "$MOUNT_POINT/tmp" "$MOUNT_POINT/proc" "$MOUNT_POINT/userdata" "$MOUNT_POINT/oem"
+		mkdir -p  "$MOUNT_POINT/sys" "$MOUNT_POINT/mnt" "$MOUNT_POINT/tmp" "$MOUNT_POINT/proc" "$MOUNT_POINT/userdata" "$MOUNT_POINT/oem" "$MOUNT_POINT/ohd_config" "$MOUNT_POINT/recordings"
 
 		echo "XXX"
 		echo 100
