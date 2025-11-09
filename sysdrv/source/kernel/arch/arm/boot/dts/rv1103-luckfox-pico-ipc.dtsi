@@ -6,7 +6,7 @@
 
 / {
 	chosen {
-		bootargs = "earlycon=uart8250,mmio32,0xff4c0000 console=ttyFIQ0 root=/dev/mmcblk1p7 rootwait snd_soc_core.prealloc_buffer_size_kbytes=16 coherent_pool=0";
+		bootargs = "earlycon=uart8250,mmio32,0xff4c0000 console=ttyFIQ0 root=PARTLABEL=rootfs rootwait snd_soc_core.prealloc_buffer_size_kbytes=16 coherent_pool=0";
 	};
 
 	acodec_sound: acodec-sound {
@@ -150,6 +150,13 @@
 				remote-endpoint = <&sc530ai_out>;
 				data-lanes = <1 2>;
 			};
+		
+                        csi_dphy_input3: endpoint@3 {
+                                reg = <1>;
+                                remote-endpoint = <&mis5001_out>;
+                                data-lanes = <1 2>;
+                        };
+
 		};
 
 		port@1 {
@@ -233,6 +240,26 @@
 			};
 		};
 	};
+        mis5001: mis5001@31 {
+                compatible = "imagedesign,mis5001";
+                status = "okay";
+                reg = <0x31>;
+                clocks = <&cru MCLK_REF_MIPI0>;
+                clock-names = "xvclk";
+                reset-gpios = <&gpio3 RK_PC5 GPIO_ACTIVE_HIGH>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&mipi_refclk_out0>;
+                rockchip,camera-module-index = <0>;
+                rockchip,camera-module-facing = "back";
+                rockchip,camera-module-name = "CMK-OT2115-PC1";
+                rockchip,camera-module-lens-name = "30IRC-F16";
+                port {
+                        mis5001_out: endpoint {
+                                remote-endpoint = <&csi_dphy_input3>;
+                                data-lanes = <1 2>;
+                        };
+                };
+        };
 };
 
 &mipi0_csi2 {
