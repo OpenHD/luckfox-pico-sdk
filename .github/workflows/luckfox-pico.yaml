@@ -1,0 +1,53 @@
+name: Build sdcard image for luckfox pico
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-sdcard:
+    runs-on: ubuntu-latest
+
+    container:
+      image: debian:bookworm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            sudo ca-certificates git xz-utils build-essential bash
+          echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
+
+      - name: Run build steps
+        run: |
+          set -e
+          echo "1" | ./build.sh lunch
+          ./build.sh media
+          ./build.sh
+          ./finish-ohd.sh
+
+      - name: Compress sdcard.img
+        run: |
+          set -e
+          cd output/genimage
+
+          if [ ! -f sdcard.img ]; then
+            echo "sdcard.img NOT FOUND!"
+            ls -R .
+            exit 1
+          fi
+
+          xz -T0 -9 -f sdcard.img
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdcard-img
+          path: output/genimage/sdcard.img.xz
+          if-no-files-found: error
