@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          echo -e "1\n0" | ./build.sh lunch
+          echo -e "1\n0\n0" | ./build.sh lunch
           ./build.sh media
           ./build.sh
           ./finish-ohd.sh
