@@ -7,6 +7,7 @@ sudo mount ./output/image/ohd_config.img output/mnt
 sudo touch output/mnt/config.txt
 sudo mkdir output/mnt/openhd
 sudo touch output/mnt/openhd/rv1106.txt
+sudo touch output/mnt/openhd/air.txt
 sudo umount output/mnt
 resize2fs ./output/image/rootfs.img 1G
 genimage --config genimage.cfg --inputpath ./output/image --outputpath ./output/genimage --rootpath ./rootfs-empty
