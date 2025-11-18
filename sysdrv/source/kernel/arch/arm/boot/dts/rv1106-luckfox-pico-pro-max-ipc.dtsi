@@ -249,6 +249,7 @@
 };
 
 &rkisp {
+	 max-input = <1920 1280 100>;
 	status = "okay";
 };
 

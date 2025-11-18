@@ -444,6 +444,7 @@
 	status = "okay";
 	clock-frequency = <100000>;
 	GT911:touchscreen {
+		status = "disabled";
 		compatible = "goodix,gt911";
 		reg = <0x14>;
 

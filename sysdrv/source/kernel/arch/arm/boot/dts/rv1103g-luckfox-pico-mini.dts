@@ -11,7 +11,7 @@
 
 / {
 	model = "Luckfox Pico Mini";
-	compatible = "rockchip,rv1103g-38x38-ipc-v10", "rockchip,rv1103";
+	compatible = "rockchip,rv1103";
 };
 
 /**********SFC**********/
@@ -76,7 +76,7 @@
 /**********UART**********/
 /* UART3_M1 */
 &uart3 {
-	status = "disabled";
+	status = "okay";
 };
 
 /* UART4_M1 */

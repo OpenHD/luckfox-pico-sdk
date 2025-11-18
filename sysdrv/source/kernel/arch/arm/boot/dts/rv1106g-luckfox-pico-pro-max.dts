@@ -11,7 +11,7 @@
 
 / {
 	model = "Luckfox Pico Pro Max";
-	compatible = "rockchip,rv1103g-38x38-ipc-v10", "rockchip,rv1106g3";
+	compatible = "rockchip,rv1106";
 };
 
 /**********CRU**********/
@@ -120,13 +120,17 @@
 
 /**********UART**********/
 /* UART3_M1 */
+&uart1 {
+        status = "okay";
+};
+
 &uart3 {
-	status = "disabled";
+	status = "okay";
 };
 
 /* UART4_M1 */
 &uart4 {
-	status = "disabled";
+	status = "okay";
 };
 
 /**********RTC**********/
