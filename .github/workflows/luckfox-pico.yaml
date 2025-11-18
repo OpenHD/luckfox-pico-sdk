@@ -27,7 +27,7 @@ jobs:
       - name: Run build steps
         run: |
           set -e
-          echo "1" | ./build.sh lunch
+          echo -e "1\n0" | ./build.sh lunch
           ./build.sh media
           ./build.sh
           ./finish-ohd.sh
