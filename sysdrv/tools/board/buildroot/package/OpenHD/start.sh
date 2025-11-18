@@ -6,8 +6,39 @@ COMMAND="openhd"
 PID_FILE="/var/run/openhd.pid"
 
 /bin/sh /oem/usr/ko/insmod_ko.sh
+
+network_init() {
+    LOCK=/run/network_init.lock
+
+    # if lock exists and process is alive, exit
+    if [ -e "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
+        echo "network_init already running"
+        return
+    fi
+
+    echo $$ > "$LOCK"
+        ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
+
+        if [ -f /data/ethaddr.txt ]; then
+                ethaddr2=$(cat /data/ethaddr.txt)
+                if [ $ethaddr1 == $ethaddr2 ]; then
+                        echo "eth HWaddr cfg ok"
+                else
+                        ifconfig eth0 down
+                        ifconfig eth0 hw ether $ethaddr2
+                fi
+        else
+                echo $ethaddr1 >/data/ethaddr.txt
+        fi
+        ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
+}
+
 start_openhd() {
+network_init&
     echo "Starting OpenHD..." | tee -a "$LOG_FILE"
+    if [ -f "/config/mis5001_CMK-OT2115-PC1_30IRC-F16.json" ]; then
+        cp /config/mis5001_CMK-OT2115-PC1_30IRC-F16.json /oem/usr/share/iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
+    fi
     sleep 5
     if [[ $(id -u) -ne 0 ]]; then
         echo "Restarting script with root privileges..." | tee -a "$LOG_FILE"
