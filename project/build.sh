@@ -1494,6 +1494,7 @@ ohd_init() {
 		partx -u "$DISK"
 		sleep 1
        	        yes | mkfs.msdos -F 32 "$REC_DEV"
+		reboot
 	    fi
 
 	    # Drop the first-boot marker
