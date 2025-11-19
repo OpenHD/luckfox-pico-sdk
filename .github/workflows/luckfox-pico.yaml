@@ -14,15 +14,18 @@ jobs:
       image: debian:bookworm
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Install dependencies
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
             sudo ca-certificates git xz-utils build-essential bash git ssh make gcc gcc-multilib g++-multilib module-assistant expect g++ gawk texinfo libssl-dev bison flex fakeroot cmake unzip gperf autoconf device-tree-compiler libncurses5-dev pkg-config bc python-is-python3 passwd openssl openssh-server openssh-client vim file cpio rsync wget curl
           echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Run build steps
         shell: bash
