@@ -2261,9 +2261,9 @@ function __GET_TARGET_PARTITION_FS_TYPE() {
 }
 
 __GET_BOOTARGS_FROM_BOARD_CFG() {
-#	if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
-		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=40M"
-#	fi
+	if [ -n "$RK_BOOTARGS_CMA_SIZE" ]; then
+		SYS_BOOTARGS="$SYS_BOOTARGS rk_dma_heap_cma=20M"
+	fi
 }
 
 __LINK_DEFCONFIG_FROM_BOARD_CFG() {
