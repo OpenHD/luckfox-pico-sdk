@@ -44,7 +44,7 @@ define OPENHD_SYSUTILS_INSTALL_TARGET_CMDS
     $(info OpenHD-SysUtils Build Directory: $(OPENHD_SYSUTILS_BUILDDIR))
     $(INSTALL) -D -m 0755 $(OPENHD_SYSUTILS_BUILDDIR)/openhd_sys_utils $(TARGET_DIR)/usr/bin/openhd_sys_utils
     $(INSTALL) -d $(TARGET_DIR)/etc/init.d
-    cp -r $(OPENHD_BUILDDIR)/../../../../package/OpenHD-SysUtils/start.sh  $(TARGET_DIR)/etc/init.d/S98openhd-sysutils
+    cp -r $(OPENHD_SYSUTILS_BUILDDIR)/../../../package/OpenHD-SysUtils/start.sh  $(TARGET_DIR)/etc/init.d/S98openhd-sysutils
     chmod +x $(TARGET_DIR)/etc/init.d/*
 endef
 
