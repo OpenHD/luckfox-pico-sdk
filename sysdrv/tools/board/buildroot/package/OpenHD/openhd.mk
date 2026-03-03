@@ -28,7 +28,7 @@ OPENHD_SITE_METHOD = git
 OPENHD_GIT_SUBMODULES = YES
 
 # Set the version to the latest commit of the default branch
-OPENHD_VERSION = luka177/2.7-evo/luckfox
+OPENHD_VERSION = 2.7-evo
 
 # Enable Git submodules if the project requires them
 OPENHD_GIT_SUBMODULES = YES
