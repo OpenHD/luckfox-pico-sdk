@@ -81,7 +81,7 @@
 
 /* UART4_M1 */
 &uart4 {
-	status = "disabled";
+	status = "okay";
 };
 
 /**********PWM**********/
