@@ -49,6 +49,10 @@ OPENHD_INSTALL_TARGET = YES
 # Dependencies
 OPENHD_DEPENDENCIES = poco libsodium gstreamer1 gst1-plugins-base libpcap host-pkgconf
 
+OPENHD_ARTOSYN_BUILD_DIR = $(ARTOSYN_SDK_ROOT)/host_drv/build-openhd-buildroot
+OPENHD_ARTOSYN_CLIENT_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/app/ar8030/libar8030_client.a
+OPENHD_ARTOSYN_COM_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/com/libcom.a
+
 # CMake options
 OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
@@ -60,7 +64,56 @@ endif
 
 ifneq ($(ARTOSYN_SDK_LIB),)
 OPENHD_CONF_OPTS += -DARTOSYN_SDK_LIB="$(ARTOSYN_SDK_LIB)"
+else ifneq ($(ARTOSYN_SDK_ROOT),)
+OPENHD_CONF_OPTS += -DARTOSYN_SDK_LIB="$(OPENHD_ARTOSYN_CLIENT_LIB);$(OPENHD_ARTOSYN_COM_LIB)"
 endif
+
+define OPENHD_BUILD_ARTOSYN_SDK
+	@if [ -z "$(ARTOSYN_SDK_ROOT)" ]; then \
+		echo "ERROR: ARTOSYN_SDK_ROOT is not set for OpenHD"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(ARTOSYN_SDK_ROOT)/host_drv/app/ar8030" ] || [ ! -d "$(ARTOSYN_SDK_ROOT)/host_drv/com" ]; then \
+		echo "ERROR: Invalid ARTOSYN_SDK_ROOT=$(ARTOSYN_SDK_ROOT)"; \
+		exit 1; \
+	fi
+	@if [ -n "$(ARTOSYN_SDK_LIB)" ]; then \
+		echo "Using prebuilt Artosyn libs: $(ARTOSYN_SDK_LIB)"; \
+	else \
+		echo "Cross-building Artosyn SDK in Buildroot: $(OPENHD_ARTOSYN_BUILD_DIR)"; \
+		rm -rf "$(OPENHD_ARTOSYN_BUILD_DIR)"; \
+		mkdir -p "$(OPENHD_ARTOSYN_BUILD_DIR)"; \
+		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) $(HOST_DIR)/bin/cmake \
+			-S "$(ARTOSYN_SDK_ROOT)/host_drv" \
+			-B "$(OPENHD_ARTOSYN_BUILD_DIR)" \
+			-DCMAKE_TOOLCHAIN_FILE="$(HOST_DIR)/share/buildroot/toolchainfile.cmake" \
+			-DAPP_STATIC_LIB=ON \
+			-DBUILD_TEST_APP=OFF \
+			-DBUILD_ARTOSYN_EXAMPLE=OFF \
+			-DBUILD_RAM_INIT=OFF \
+			-DBUILD_TUNTAP=OFF \
+			-DBUILD_BW_UPDATE_DEMO=OFF \
+			-DBUILD_IMG_UPGRADE=OFF \
+			-DBUILD_XDATA_TEST=OFF \
+			-DBUILD_REPEATER_TEST=OFF \
+			-DBUILD_BB_TEST=OFF \
+			-DBUILD_WORK_MODE_CFG=OFF \
+			-DBUILD_NET_DEV_DEMO=OFF \
+			-DENABLE_PYTHON=OFF \
+			-DENABLE_JAVA=OFF \
+			-DUSING_8030USB=ON \
+			-DUSING_8030SDIO=OFF \
+			-DUSING_8030UART=OFF \
+			-DUSING_8030DRV=OFF; \
+		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) $(HOST_DIR)/bin/cmake \
+			--build "$(OPENHD_ARTOSYN_BUILD_DIR)" \
+			--target ar8030_client com; \
+		test -f "$(OPENHD_ARTOSYN_CLIENT_LIB)"; \
+		test -f "$(OPENHD_ARTOSYN_COM_LIB)"; \
+	fi
+endef
+
+OPENHD_PRE_CONFIGURE_HOOKS += OPENHD_BUILD_ARTOSYN_SDK
 
 define OPENHD_INSTALL_TARGET_CMDS
 	$(info OpenHD Build Directory: $(@D))
