@@ -83,7 +83,7 @@ define OPENHD_BUILD_ARTOSYN_SDK
 		echo "Cross-building Artosyn SDK in Buildroot: $(OPENHD_ARTOSYN_BUILD_DIR)"; \
 		rm -rf "$(OPENHD_ARTOSYN_BUILD_DIR)"; \
 		mkdir -p "$(OPENHD_ARTOSYN_BUILD_DIR)"; \
-		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) $(HOST_DIR)/bin/cmake \
+		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) cmake \
 			-S "$(ARTOSYN_SDK_ROOT)/host_drv" \
 			-B "$(OPENHD_ARTOSYN_BUILD_DIR)" \
 			-DCMAKE_TOOLCHAIN_FILE="$(HOST_DIR)/share/buildroot/toolchainfile.cmake" \
@@ -105,7 +105,7 @@ define OPENHD_BUILD_ARTOSYN_SDK
 			-DUSING_8030SDIO=OFF \
 			-DUSING_8030UART=OFF \
 			-DUSING_8030DRV=OFF; \
-		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) $(HOST_DIR)/bin/cmake \
+		PATH="$(BR_PATH)" $(TARGET_MAKE_ENV) cmake \
 			--build "$(OPENHD_ARTOSYN_BUILD_DIR)" \
 			--target ar8030_client com; \
 		test -f "$(OPENHD_ARTOSYN_CLIENT_LIB)"; \
