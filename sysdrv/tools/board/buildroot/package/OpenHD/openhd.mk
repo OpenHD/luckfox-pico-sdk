@@ -54,6 +54,14 @@ OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
     -DCMAKE_EXE_LINKER_FLAGS="-lstdc++fs"
 
+ifneq ($(ARTOSYN_SDK_ROOT),)
+OPENHD_CONF_OPTS += -DARTOSYN_SDK_ROOT="$(ARTOSYN_SDK_ROOT)"
+endif
+
+ifneq ($(ARTOSYN_SDK_LIB),)
+OPENHD_CONF_OPTS += -DARTOSYN_SDK_LIB="$(ARTOSYN_SDK_LIB)"
+endif
+
 define OPENHD_INSTALL_TARGET_CMDS
 	$(info OpenHD Build Directory: $(@D))
 	$(INSTALL) -D -m 0755 $(@D)/openhd $(TARGET_DIR)/usr/bin/openhd

@@ -70,22 +70,32 @@ jobs:
         shell: bash
         env:
           ARTLINK_REPO: https://github.com/OpenHD-Technologies/OpenHD-ArtLink.git
-          ARTLINK_FETCH_MODE: git-only
           ARTLINK_GIT_AUTH_USERNAME: raphael@openhdfpv.org
           ARTLINK_GIT_AUTH: raphael@openhdfpv.org:${{ secrets.OPENHD_SUBMODULE_TOKEN }}
         run: |
           set -e
 
-          mkdir -p "${GITHUB_WORKSPACE}/openhd-private"
+          sdk_root="${GITHUB_WORKSPACE}/openhd-private/artosyn_sdk"
+          auth_b64="$(printf '%s' "${ARTLINK_GIT_AUTH}" | base64 | tr -d '\n')"
 
-          source "${GITHUB_WORKSPACE}/openhd-src/OpenHD/scripts/resolve_artosyn_sdk.sh"
-          export ARTLINK_SOURCE_DIR="${GITHUB_WORKSPACE}/openhd-private/artosyn_sdk"
-          resolve_artosyn_sdk
+          rm -rf "${sdk_root}"
+          mkdir -p "$(dirname "${sdk_root}")"
+          GIT_TERMINAL_PROMPT=0 git \
+            -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth_b64}" \
+            clone --quiet "${ARTLINK_REPO}" "${sdk_root}"
+
+          if [ ! -d "${sdk_root}/host_drv/app/ar8030" ] || [ ! -d "${sdk_root}/host_drv/com" ]; then
+            echo "Artosyn SDK layout is incomplete"
+            find "${sdk_root}" -maxdepth 3 -type d | sort
+            exit 1
+          fi
+
+          echo "Artosyn SDK root: ${sdk_root}"
+          find "${sdk_root}" -type f \( -name "libar8030_client.a" -o -name "libar8030_client.so" -o -name "libcom.a" \) -print || true
 
           {
             echo "OPENHD_LOCAL_SITE=${GITHUB_WORKSPACE}/openhd-src"
-            echo "ARTOSYN_SDK_ROOT=${ARTOSYN_SDK_ROOT}"
-            echo "ARTOSYN_SDK_LIB=${ARTOSYN_SDK_LIB}"
+            echo "ARTOSYN_SDK_ROOT=${sdk_root}"
           } >> "${GITHUB_ENV}"
 
       - name: Run build steps (${{ matrix.target }})
