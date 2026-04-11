@@ -118,8 +118,9 @@ OPENHD_PRE_CONFIGURE_HOOKS += OPENHD_BUILD_ARTOSYN_SDK
 define OPENHD_INSTALL_TARGET_CMDS
 	$(info OpenHD Build Directory: $(@D))
 	$(INSTALL) -D -m 0755 $(@D)/$(OPENHD_SUBDIR)/openhd $(TARGET_DIR)/usr/bin/openhd
-	$(INSTALL) -D -m 0755 $(BR2_EXTERNAL_YOURTREE_PATH)/package/OpenHD/start.sh \
-		$(TARGET_DIR)/etc/init.d/S99openhd
+	$(INSTALL) -d $(TARGET_DIR)/etc/init.d
+	cp -r $(@D)/../../../package/OpenHD/start.sh $(TARGET_DIR)/etc/init.d/S99openhd
+	chmod +x $(TARGET_DIR)/etc/init.d/S99openhd
 endef
 
 $(eval $(cmake-package))
