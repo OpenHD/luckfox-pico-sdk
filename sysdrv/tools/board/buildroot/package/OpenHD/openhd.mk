@@ -1,4 +1,4 @@
-###################################################################
+################################################################################
 # OpenHD
 #
 # Licensed under the GNU General Public License (GPL) Version 3.
@@ -20,41 +20,34 @@
 #
 # © OpenHD, All Rights Reserved.
 ################################################################################
+
 $(info Building the OpenHD package...)
 
-# The Git repository from which to clone the source code
+# Git repository
 OPENHD_SITE = https://github.com/OpenHD/OpenHD.git
 OPENHD_SITE_METHOD = git
 OPENHD_GIT_SUBMODULES = YES
 
-# Set the version to the latest commit of the default branch
-OPENHD_VERSION = 2.7-evo
-
-# Enable Git submodules if the project requires them
-OPENHD_GIT_SUBMODULES = YES
-
-# Subdirectory inside the Git repo, if needed (if OpenHD is not in the root)
-OPENHD_SUBDIR = OpenHD
+# Always resolve to the current HEAD of the openhd-3.0 branch
+# Note: this is not reproducible and is not the recommended Buildroot approach.
+OPENHD_VERSION = $(shell git ls-remote $(OPENHD_SITE) refs/heads/openhd-3.0 | cut -f1)
 
 # Install to the target system
 OPENHD_INSTALL_TARGET = YES
 
-# List of dependencies that must be built before OpenHD
+# Dependencies
 OPENHD_DEPENDENCIES = poco libsodium gstreamer1 gst1-plugins-base libpcap host-pkgconf
 
-# Additional configuration options for the CMake build
+# CMake options
 OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
     -DCMAKE_EXE_LINKER_FLAGS="-lstdc++fs"
 
-# Install init.d services to target
 define OPENHD_INSTALL_TARGET_CMDS
-    $(info OpenHD Build Directory: $(OPENHD_BUILDDIR))
-    $(INSTALL) -D -m 0755 $(OPENHD_BUILDDIR)/openhd $(TARGET_DIR)/usr/bin/openhd
-    $(INSTALL) -d $(TARGET_DIR)/etc/init.d
-    cp -r $(OPENHD_BUILDDIR)/../../../../package/OpenHD/start.sh  $(TARGET_DIR)/etc/init.d/S99openhd
-    chmod +x $(TARGET_DIR)/etc/init.d/*
+	$(info OpenHD Build Directory: $(@D))
+	$(INSTALL) -D -m 0755 $(@D)/openhd $(TARGET_DIR)/usr/bin/openhd
+	$(INSTALL) -D -m 0755 $(BR2_EXTERNAL_YOURTREE_PATH)/package/OpenHD/start.sh \
+		$(TARGET_DIR)/etc/init.d/S99openhd
 endef
 
-# Use Buildroot's CMake package infrastructure to handle the build
 $(eval $(cmake-package))
