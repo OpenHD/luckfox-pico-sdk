@@ -24,13 +24,24 @@
 $(info Building the OpenHD package...)
 
 # Git repository
-OPENHD_SITE = https://github.com/OpenHD/OpenHD.git
+OPENHD_UPSTREAM_SITE = https://github.com/OpenHD/OpenHD.git
+
+ifeq ($(OPENHD_LOCAL_SITE),)
+OPENHD_SITE = $(OPENHD_UPSTREAM_SITE)
 OPENHD_SITE_METHOD = git
 OPENHD_GIT_SUBMODULES = YES
 
 # Always resolve to the current HEAD of the openhd-3.0 branch
 # Note: this is not reproducible and is not the recommended Buildroot approach.
 OPENHD_VERSION = $(shell git ls-remote $(OPENHD_SITE) refs/heads/openhd-3.0 | cut -f1)
+else
+OPENHD_SITE = $(OPENHD_LOCAL_SITE)
+OPENHD_SITE_METHOD = local
+OPENHD_VERSION = local
+endif
+
+# openhd-3.0 keeps the CMake project in the OpenHD/ subdirectory.
+OPENHD_SUBDIR = OpenHD
 
 # Install to the target system
 OPENHD_INSTALL_TARGET = YES

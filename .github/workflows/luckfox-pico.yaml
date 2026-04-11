@@ -9,6 +9,10 @@ on:
 jobs:
   build-sdcard:
     runs-on: ubuntu-latest
+    env:
+      OPENHD_SUBMODULE_TOKEN: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+      DOWNLOAD_KEY: ${{ secrets.DOWNLOAD_KEY }}
+      DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
     strategy:
       matrix:
         target: [rv1103, rv1106]
@@ -34,6 +38,55 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Checkout OpenHD openhd-3.0 with private submodules
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD
+          ref: openhd-3.0
+          path: openhd-src
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+
+      - name: Ensure private OpenHD sources are present
+        shell: bash
+        run: |
+          set -e
+
+          git -C openhd-src submodule sync --recursive
+          git -C openhd-src submodule update --init --recursive
+
+          if [ ! -f openhd-src/OpenHD/ohd_interface/video_crypto_private/CMakeLists.txt ]; then
+            echo "Private submodule content missing, updating to origin/main..."
+            git -C openhd-src/OpenHD/ohd_interface/video_crypto_private fetch origin main
+            git -C openhd-src/OpenHD/ohd_interface/video_crypto_private checkout -f origin/main
+          fi
+
+          test -f openhd-src/OpenHD/ohd_interface/video_crypto_private/CMakeLists.txt
+          git -C openhd-src/OpenHD/ohd_interface/video_crypto_private rev-parse HEAD
+
+      - name: Prepare private Artosyn SDK
+        shell: bash
+        env:
+          ARTLINK_REPO: https://github.com/OpenHD-Technologies/OpenHD-ArtLink.git
+          ARTLINK_FETCH_MODE: git-only
+          ARTLINK_GIT_AUTH_USERNAME: raphael@openhdfpv.org
+          ARTLINK_GIT_AUTH: raphael@openhdfpv.org:${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+        run: |
+          set -e
+
+          mkdir -p "${GITHUB_WORKSPACE}/openhd-private"
+
+          source "${GITHUB_WORKSPACE}/openhd-src/OpenHD/scripts/resolve_artosyn_sdk.sh"
+          export ARTLINK_SOURCE_DIR="${GITHUB_WORKSPACE}/openhd-private/artosyn_sdk"
+          resolve_artosyn_sdk
+
+          {
+            echo "OPENHD_LOCAL_SITE=${GITHUB_WORKSPACE}/openhd-src"
+            echo "ARTOSYN_SDK_ROOT=${ARTOSYN_SDK_ROOT}"
+            echo "ARTOSYN_SDK_LIB=${ARTOSYN_SDK_LIB}"
+          } >> "${GITHUB_ENV}"
 
       - name: Run build steps (${{ matrix.target }})
         shell: bash
