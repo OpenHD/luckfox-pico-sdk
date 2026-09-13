@@ -176,6 +176,60 @@ jobs:
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
           echo "TAR_NAME=$TAR_NAME" >> "$GITHUB_ENV"
 
+      - name: Package OpenHD and SysUtils components
+        run: |
+          set -e
+          
+          ROOTFS_DIR=$(find output/out -maxdepth 1 -type d -name "rootfs_*" | head -n 1)
+          if [ -z "$ROOTFS_DIR" ]; then
+            echo "Rootfs directory NOT FOUND!"
+            exit 1
+          fi
+          
+          # Create openhd component
+          mkdir -p openhd-comp/usr/bin openhd-comp/usr/lib
+          cp "$ROOTFS_DIR/usr/bin/openhd" openhd-comp/usr/bin/ || true
+          
+          cat > openhd-comp/component-manifest.json <<EOF
+          {
+            "schema": 1,
+            "component": "openhd",
+            "component_version": "3.0.0",
+            "package_version": "3.0.0",
+            "platform": "luckfox",
+            "architecture": "arm",
+            "sdk_sha256": "unknown",
+            "sdk_buildroot_commit": "unknown"
+          }
+EOF
+          (cd openhd-comp && find . -type f ! -name sha256sums -print0 | sort -z | xargs -0 sha256sum >sha256sums)
+          tar -czf "/deploy/openhd-${{ matrix.target }}-latest.tar.gz" -C openhd-comp .
+          
+          # Create sysutils component
+          mkdir -p sysutils-comp/usr/bin
+          cp "$ROOTFS_DIR/usr/bin/openhd_sys_utils" sysutils-comp/usr/bin/ || true
+          
+          cat > sysutils-comp/component-manifest.json <<EOF
+          {
+            "schema": 1,
+            "component": "openhd-sys-utils",
+            "component_version": "1.0.0",
+            "package_version": "1.0.0",
+            "platform": "luckfox",
+            "architecture": "arm",
+            "sdk_sha256": "unknown",
+            "sdk_buildroot_commit": "unknown"
+          }
+EOF
+          (cd sysutils-comp && find . -type f ! -name sha256sums -print0 | sort -z | xargs -0 sha256sum >sha256sums)
+          tar -czf "/deploy/openhd-sys-utils-${{ matrix.target }}-latest.tar.gz" -C sysutils-comp .
+          
+          cd "/deploy"
+          sha256sum "openhd-${{ matrix.target }}-latest.tar.gz" > "openhd-${{ matrix.target }}-latest.tar.gz.sha256"
+          sha256sum "openhd-sys-utils-${{ matrix.target }}-latest.tar.gz" > "openhd-sys-utils-${{ matrix.target }}-latest.tar.gz.sha256"
+          
+          echo "OHD_COMP=openhd-${{ matrix.target }}-latest.tar.gz" >> ""
+          echo "SYS_COMP=openhd-sys-utils-${{ matrix.target }}-latest.tar.gz" >> ""
       - name: Upload Firmware Artifacts (${{ matrix.target }})
         uses: actions/upload-artifact@v4
         with:
@@ -215,5 +269,27 @@ jobs:
             --name "openhd-${{ matrix.target }}-ohd-root-sha256" \
             --version "$DT" \
             openhd/dev-release "deploy/$TAR_NAME.sha256"
+
+          cloudsmith push raw --republish \\
+            --name "openhd-${{ matrix.target }}-latest" \\
+            --version "$DT" \\
+            openhd/dev-release "deploy/$OHD_COMP"
+
+          cloudsmith push raw --republish \\
+            --name "openhd-${{ matrix.target }}-latest-sha256" \\
+            --version "$DT" \\
+            openhd/dev-release "deploy/$OHD_COMP.sha256"
+
+          cloudsmith push raw --republish \\
+            --name "openhd-sys-utils-${{ matrix.target }}-latest" \\
+            --version "$DT" \\
+            openhd/dev-release "deploy/$SYS_COMP"
+
+          cloudsmith push raw --republish \\
+            --name "openhd-sys-utils-${{ matrix.target }}-latest-sha256" \\
+            --version "$DT" \\
+            openhd/dev-release "deploy/$SYS_COMP.sha256"
+
+
 
 
