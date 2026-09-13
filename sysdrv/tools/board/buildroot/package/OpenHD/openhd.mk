@@ -113,7 +113,7 @@ define OPENHD_BUILD_ARTOSYN_SDK
 	fi
 endef
 
-OPENHD_PRE_CONFIGURE_HOOKS += OPENHD_BUILD_ARTOSYN_SDK
+# removed artosyn hook
 
 define OPENHD_INSTALL_TARGET_CMDS
 	$(info OpenHD Build Directory: $(@D))
@@ -124,3 +124,4 @@ define OPENHD_INSTALL_TARGET_CMDS
 endef
 
 $(eval $(cmake-package))
+
