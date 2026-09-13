@@ -75,38 +75,6 @@ jobs:
           test -f openhd-src/OpenHD/ohd_interface/video_crypto_private/CMakeLists.txt
           git -C openhd-src/OpenHD/ohd_interface/video_crypto_private rev-parse HEAD
 
-      - name: Prepare private Artosyn SDK
-        shell: bash
-        env:
-          ARTLINK_REPO: https://github.com/OpenHD-Technologies/OpenHD-ArtLink.git
-          ARTLINK_GIT_AUTH_USERNAME: raphael@openhdfpv.org
-          ARTLINK_GIT_AUTH: raphael@openhdfpv.org:${{ secrets.OPENHD_SUBMODULE_TOKEN }}
-        run: |
-          set -e
-
-          sdk_root="${{ github.workspace }}/openhd-private/artosyn_sdk"
-          auth_b64="$(printf '%s' "${ARTLINK_GIT_AUTH}" | base64 | tr -d '\n')"
-
-          rm -rf "${sdk_root}"
-          mkdir -p "$(dirname "${sdk_root}")"
-          GIT_TERMINAL_PROMPT=0 git \
-            -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth_b64}" \
-            clone --quiet "${ARTLINK_REPO}" "${sdk_root}"
-
-          if [ ! -d "${sdk_root}/host_drv/app/ar8030" ] || [ ! -d "${sdk_root}/host_drv/com" ]; then
-            echo "Artosyn SDK layout is incomplete"
-            find "${sdk_root}" -maxdepth 3 -type d | sort
-            exit 1
-          fi
-
-          echo "Artosyn SDK root: ${sdk_root}"
-          find "${sdk_root}" -type f \( -name "libar8030_client.a" -o -name "libar8030_client.so" -o -name "libcom.a" \) -print || true
-
-          {
-            echo "OPENHD_LOCAL_SITE=${{ github.workspace }}/openhd-src"
-            echo "ARTOSYN_SDK_ROOT=${sdk_root}"
-          } >> "$GITHUB_ENV"
-
       - name: Run build steps (${{ matrix.target }})
         shell: bash
         run: |
@@ -289,6 +257,8 @@ jobs:
             --name "openhd-sys-utils-${{ matrix.target }}-latest-sha256" \\
             --version "$DT" \\
             openhd/dev-release "deploy/$SYS_COMP.sha256"
+
+
 
 
 
