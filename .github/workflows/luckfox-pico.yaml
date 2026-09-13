@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: OpenHD/OpenHD
-          ref: openhd-3.0
+          ref: dev-release
           path: openhd-src
           submodules: recursive
           fetch-depth: 0
@@ -215,4 +215,5 @@ jobs:
             --name "openhd-${{ matrix.target }}-ohd-root-sha256" \
             --version "$DT" \
             openhd/dev-release "deploy/$TAR_NAME.sha256"
+
 
