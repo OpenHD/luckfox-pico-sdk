@@ -190,7 +190,7 @@ jobs:
           mkdir -p openhd-comp/usr/bin openhd-comp/usr/lib
           cp "$ROOTFS_DIR/usr/bin/openhd" openhd-comp/usr/bin/ || true
           
-          cat > openhd-comp/component-manifest.json <<EOF
+          cat > openhd-comp/component-manifest.json <<          EOF
           {
             "schema": 1,
             "component": "openhd",
@@ -201,7 +201,7 @@ jobs:
             "sdk_sha256": "unknown",
             "sdk_buildroot_commit": "unknown"
           }
-EOF
+          EOF
           (cd openhd-comp && find . -type f ! -name sha256sums -print0 | sort -z | xargs -0 sha256sum >sha256sums)
           tar -czf "/deploy/openhd-${{ matrix.target }}-latest.tar.gz" -C openhd-comp .
           
@@ -209,7 +209,7 @@ EOF
           mkdir -p sysutils-comp/usr/bin
           cp "$ROOTFS_DIR/usr/bin/openhd_sys_utils" sysutils-comp/usr/bin/ || true
           
-          cat > sysutils-comp/component-manifest.json <<EOF
+          cat > sysutils-comp/component-manifest.json <<          EOF
           {
             "schema": 1,
             "component": "openhd-sys-utils",
@@ -220,7 +220,7 @@ EOF
             "sdk_sha256": "unknown",
             "sdk_buildroot_commit": "unknown"
           }
-EOF
+          EOF
           (cd sysutils-comp && find . -type f ! -name sha256sums -print0 | sort -z | xargs -0 sha256sum >sha256sums)
           tar -czf "/deploy/openhd-sys-utils-${{ matrix.target }}-latest.tar.gz" -C sysutils-comp .
           
@@ -289,6 +289,7 @@ EOF
             --name "openhd-sys-utils-${{ matrix.target }}-latest-sha256" \\
             --version "$DT" \\
             openhd/dev-release "deploy/$SYS_COMP.sha256"
+
 
 
 
