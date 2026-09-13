@@ -14,10 +14,19 @@ jobs:
       DOWNLOAD_KEY: ${{ secrets.DOWNLOAD_KEY }}
       DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
     strategy:
+      fail-fast: false
       matrix:
-        target: [rv1103, rv1106]
+        target: [luckfox, rv1103, rv1106, aura, lyra, luckfox_picoA]
         include:
+          - target: luckfox
+            lunch_option: 1
           - target: rv1103
+            lunch_option: 1
+          - target: aura
+            lunch_option: 1
+          - target: lyra
+            lunch_option: 1
+          - target: luckfox_picoA
             lunch_option: 1
           - target: rv1106
             lunch_option: 4
@@ -30,7 +39,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            sudo ca-certificates git xz-utils build-essential bash git ssh make gcc gcc-multilib g++-multilib module-assistant expect g++ gawk texinfo libssl-dev bison flex fakeroot cmake unzip gperf autoconf device-tree-compiler libncurses5-dev pkg-config bc python-is-python3 passwd openssl openssh-server openssh-client vim file cpio rsync wget curl genimage mtools dosfstools
+            sudo ca-certificates git xz-utils build-essential bash git ssh make gcc gcc-multilib g++-multilib module-assistant expect g++ gawk texinfo libssl-dev bison flex fakeroot cmake unzip gperf autoconf device-tree-compiler libncurses5-dev pkg-config bc python-is-python3 passwd openssl openssh-server openssh-client vim file cpio rsync wget curl genimage mtools dosfstools pipx zip
           echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
 
       - name: Checkout repository
@@ -75,7 +84,7 @@ jobs:
         run: |
           set -e
 
-          sdk_root="${GITHUB_WORKSPACE}/openhd-private/artosyn_sdk"
+          sdk_root="${{ github.workspace }}/openhd-private/artosyn_sdk"
           auth_b64="$(printf '%s' "${ARTLINK_GIT_AUTH}" | base64 | tr -d '\n')"
 
           rm -rf "${sdk_root}"
@@ -94,9 +103,9 @@ jobs:
           find "${sdk_root}" -type f \( -name "libar8030_client.a" -o -name "libar8030_client.so" -o -name "libcom.a" \) -print || true
 
           {
-            echo "OPENHD_LOCAL_SITE=${GITHUB_WORKSPACE}/openhd-src"
+            echo "OPENHD_LOCAL_SITE=${{ github.workspace }}/openhd-src"
             echo "ARTOSYN_SDK_ROOT=${sdk_root}"
-          } >> "${GITHUB_ENV}"
+          } >> "$GITHUB_ENV"
 
       - name: Run build steps (${{ matrix.target }})
         shell: bash
@@ -120,7 +129,7 @@ jobs:
             exit 1
           fi
 
-          # Compress and rename per target (rv1103 / rv1106)
+          # Compress and rename per target
           xz -T0 -9 -f sdcard.img
           mv sdcard.img.xz sdcard-${{ matrix.target }}.img.xz
 
@@ -130,3 +139,80 @@ jobs:
           name: sdcard-img-${{ matrix.target }}
           path: output/genimage/sdcard-${{ matrix.target }}.img.xz
           if-no-files-found: error
+      - name: Package Firmware and OHD Root (${{ matrix.target }})
+        run: |
+          set -e
+          echo "DT=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> "$GITHUB_ENV"
+          mkdir -p "$GITHUB_WORKSPACE/deploy"
+          
+          ZIP_NAME="openhd-${{ matrix.target }}-firmware.zip"
+          TAR_NAME="openhd-${{ matrix.target }}-ohd-root.tar.gz"
+          
+          # Package firmware images (boot.img, rootfs.img, etc)
+          if [ -d "output/image" ]; then
+            cd output/image
+            zip -r "$GITHUB_WORKSPACE/deploy/$ZIP_NAME" .
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "output/image NOT FOUND!"
+            exit 1
+          fi
+          
+          # Package sysroot (rootfs contents)
+          ROOTFS_DIR=$(find output/out -maxdepth 1 -type d -name "rootfs_*" | head -n 1)
+          if [ -n "$ROOTFS_DIR" ] && [ -d "$ROOTFS_DIR" ]; then
+            cd "$ROOTFS_DIR"
+            tar -czf "$GITHUB_WORKSPACE/deploy/$TAR_NAME" .
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "Rootfs directory NOT FOUND in output/out!"
+            exit 1
+          fi
+          
+          cd "$GITHUB_WORKSPACE/deploy"
+          sha256sum "$ZIP_NAME" > "$ZIP_NAME.sha256"
+          sha256sum "$TAR_NAME" > "$TAR_NAME.sha256"
+          
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          echo "TAR_NAME=$TAR_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload Firmware Artifacts (${{ matrix.target }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-and-root-${{ matrix.target }}
+          path: |
+            deploy/${{ env.ZIP_NAME }}
+            deploy/${{ env.ZIP_NAME }}.sha256
+            deploy/${{ env.TAR_NAME }}
+            deploy/${{ env.TAR_NAME }}.sha256
+          if-no-files-found: error
+
+      - name: Install Cloudsmith CLI
+        run: pipx install cloudsmith-cli
+
+      - name: Publish to Cloudsmith (${{ matrix.target }})
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          : "${CLOUDSMITH_API_KEY:?CLOUDSMITH_API_KEY secret is required to publish}"
+          
+          cloudsmith push raw --republish \
+            --name "openhd-${{ matrix.target }}-firmware" \
+            --version "$DT" \
+            openhd/dev-release "deploy/$ZIP_NAME"
+            
+          cloudsmith push raw --republish \
+            --name "openhd-${{ matrix.target }}-firmware-sha256" \
+            --version "$DT" \
+            openhd/dev-release "deploy/$ZIP_NAME.sha256"
+            
+          cloudsmith push raw --republish \
+            --name "openhd-${{ matrix.target }}-ohd-root" \
+            --version "$DT" \
+            openhd/dev-release "deploy/$TAR_NAME"
+            
+          cloudsmith push raw --republish \
+            --name "openhd-${{ matrix.target }}-ohd-root-sha256" \
+            --version "$DT" \
+            openhd/dev-release "deploy/$TAR_NAME.sha256"
+
