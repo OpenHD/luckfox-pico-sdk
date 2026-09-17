@@ -107,6 +107,9 @@ export RK_BUILD_APP_TO_OEM_PARTITION=y
 # enable rockchip test
 export RK_ENABLE_ROCKCHIP_TEST=y
 
+# Media samples are not required in production images.
+export RK_ENABLE_SAMPLE=n
+
 # enable rockchip wifi
 export RK_ENABLE_WIFI=y
 export RK_ENABLE_WIFI_CHIP=AIC8800DC
