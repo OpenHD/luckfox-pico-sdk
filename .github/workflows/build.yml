@@ -1,0 +1,285 @@
+name: Build Luckfox Pico SDK and base images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: luckfox-pico-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DOWNLOAD_KEY: ${{ secrets.DOWNLOAD_KEY }}
+      DOWNLOAD_URL: ${{ secrets.DOWNLOAD_URL }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '[{"kind":"sdk","id":"luckfox-pico-sdk","name":"SDK/sysroot","board_index":4,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk"}]' || '[{"kind":"image","id":"luckfox-pico-zero","name":"Luckfox Pico Zero base image","board_index":11,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Zero-IPC.mk"},{"kind":"image","id":"luckfox-pico-ultra-w","name":"Luckfox Pico Ultra W base image","board_index":6,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra_W-IPC.mk"},{"kind":"image","id":"luckfox-pico-ultra","name":"Luckfox Pico Ultra base image","board_index":5,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra-IPC.mk"},{"kind":"image","id":"luckfox-pico-pro-max","name":"Luckfox Pico Pro/Max base image","board_index":4,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk"},{"kind":"image","id":"luckfox-pico-plus","name":"Luckfox Pico Plus base image","board_index":2,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Plus-IPC.mk"},{"kind":"image","id":"luckfox-pico-mini","name":"Luckfox Pico Mini base image","board_index":1,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Mini-IPC.mk"}]') }}
+
+    container:
+      image: debian:bookworm
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            autoconf bash bc bison build-essential ca-certificates cmake cpio \
+            device-tree-compiler dosfstools expect fakeroot file flex g++ \
+            g++-multilib gawk gcc gcc-multilib genimage git gperf libncurses5-dev \
+            libssl-dev make module-assistant mtools openssh-client openssl passwd \
+            pipx pkg-config python-is-python3 rsync ssh sudo texinfo unzip vim \
+            wget xz-utils
+          echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
+
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Select and verify board
+        shell: bash
+        env:
+          BOARD_INDEX: ${{ matrix.board_index }}
+          EXPECTED_CONFIG: ${{ matrix.board_config }}
+          EXPECTED_BOOT_MEDIUM: ${{ matrix.boot_medium }}
+        run: |
+          set -euo pipefail
+
+          # All selected targets use boot-medium option 0 and Buildroot option 0.
+          printf '%s\n0\n0\n' "$BOARD_INDEX" | ./build.sh lunch
+
+          selected_config=$(basename "$(readlink -f .BoardConfig.mk)")
+          test "$selected_config" = "$EXPECTED_CONFIG"
+
+          # shellcheck disable=SC1091
+          source .BoardConfig.mk
+          test "$RK_BOOT_MEDIUM" = "$EXPECTED_BOOT_MEDIUM"
+          test "$LF_TARGET_ROOTFS" = "buildroot"
+
+      - name: Build firmware and runtime libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./build.sh media
+          ./build.sh
+
+      - name: Package relocatable SDK/sysroot
+        if: matrix.kind == 'sdk'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          buildroot_dir="sysdrv/source/buildroot/buildroot-2023.02.6"
+          test -d "$buildroot_dir/output/host"
+          make -C "$buildroot_dir" sdk
+
+          sdk_archive=$(find "$buildroot_dir/output/images" -maxdepth 1 \
+            -type f -name '*_sdk-buildroot.tar.gz' -print -quit)
+          test -n "$sdk_archive"
+
+          mkdir -p deploy
+          archive_name="openhd-luckfox-pico-sdk.tar.gz"
+          manifest_name="openhd-luckfox-pico-sdk.manifest.json"
+          cp "$sdk_archive" "deploy/$archive_name"
+
+          tar -tzf "deploy/$archive_name" > deploy/sdk-contents.txt
+          grep -q '^\./relocate-sdk.sh$' deploy/sdk-contents.txt
+          grep -q '^\./environment-setup$' deploy/sdk-contents.txt
+          grep -q '^\./share/buildroot/toolchainfile.cmake$' \
+            deploy/sdk-contents.txt
+          grep -q \
+            '^\./arm-buildroot-linux-uclibcgnueabihf/sysroot/usr/include/' \
+            deploy/sdk-contents.txt
+          grep -q 'libPocoFoundation.so' deploy/sdk-contents.txt
+          grep -q 'libgstreamer-1.0.so' deploy/sdk-contents.txt
+          grep -q 'libsodium.so' deploy/sdk-contents.txt
+          grep -q 'libpcap.so' deploy/sdk-contents.txt
+
+          archive_sha256=$(sha256sum "deploy/$archive_name" | cut -d' ' -f1)
+          archive_size=$(stat -c '%s' "deploy/$archive_name")
+          generated_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          poco_version=$(sed -n 's/^POCO_VERSION = //p' \
+            "$buildroot_dir/package/poco/poco.mk")
+          gstreamer_version=$(sed -n 's/^GSTREAMER1_VERSION = //p' \
+            "$buildroot_dir/package/gstreamer1/gstreamer1/gstreamer1.mk")
+          libpcap_version=$(sed -n 's/^LIBPCAP_VERSION = //p' \
+            "$buildroot_dir/package/libpcap/libpcap.mk")
+          libsodium_version=$(sed -n 's/^LIBSODIUM_VERSION = //p' \
+            "$buildroot_dir/package/libsodium/libsodium.mk")
+          test -n "$poco_version"
+          test -n "$gstreamer_version"
+          test -n "$libpcap_version"
+          test -n "$libsodium_version"
+
+          printf '%s  %s\n' "$archive_sha256" "$archive_name" \
+            > "deploy/${archive_name}.sha256"
+
+          cat > "deploy/$manifest_name" <<EOF
+          {
+            "schema": 1,
+            "type": "openhd-build-sdk",
+            "platform": "luckfox-pico",
+            "targets": [
+              "luckfox-pico-zero",
+              "luckfox-pico-ultra-w",
+              "luckfox-pico-ultra",
+              "luckfox-pico-pro-max",
+              "luckfox-pico-plus",
+              "luckfox-pico-mini"
+            ],
+            "architecture": "armhf",
+            "cpu": "armv7-a",
+            "libc": "uclibc",
+            "toolchain": "arm-buildroot-linux-uclibcgnueabihf",
+            "buildroot": "2023.02.6",
+            "libraries": {
+              "poco": "${poco_version}",
+              "gstreamer": "${gstreamer_version}",
+              "libpcap": "${libpcap_version}",
+              "libsodium": "${libsodium_version}"
+            },
+            "sdk_commit": "${GITHUB_SHA}",
+            "archive": "${archive_name}",
+            "size": ${archive_size},
+            "sha256": "${archive_sha256}",
+            "sdk_sha256": "${archive_sha256}",
+            "generated_at": "${generated_at}"
+          }
+          EOF
+
+      - name: Upload SDK artifact
+        if: matrix.kind == 'sdk'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openhd-luckfox-pico-sdk
+          path: |
+            deploy/openhd-luckfox-pico-sdk.tar.gz
+            deploy/openhd-luckfox-pico-sdk.tar.gz.sha256
+            deploy/openhd-luckfox-pico-sdk.manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Install Cloudsmith CLI
+        if: matrix.kind == 'sdk' && github.event_name != 'pull_request'
+        run: |
+          pipx install cloudsmith-cli
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Publish SDK to Cloudsmith
+        if: matrix.kind == 'sdk' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          : "${CLOUDSMITH_API_KEY:?CLOUDSMITH_API_KEY secret is required}"
+
+          version="${GITHUB_SHA:0:12}"
+          for file in \
+            openhd-luckfox-pico-sdk.tar.gz \
+            openhd-luckfox-pico-sdk.tar.gz.sha256 \
+            openhd-luckfox-pico-sdk.manifest.json; do
+            cloudsmith push raw --republish \
+              --name "$file" \
+              --version "$version" \
+              openhd/dev-release "deploy/$file"
+          done
+
+      - name: Verify clean base root filesystem
+        if: matrix.kind == 'image'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rootfs_dir=$(find output/out -maxdepth 1 -type d \
+            -name 'rootfs_*' -print -quit)
+          test -n "$rootfs_dir"
+          test ! -e "$rootfs_dir/usr/bin/openhd"
+          test ! -e "$rootfs_dir/usr/bin/openhd_sys_utils"
+          test ! -e "$rootfs_dir/etc/init.d/S99openhd"
+          test ! -e "$rootfs_dir/etc/init.d/S98openhd-sysutils"
+
+          test -n "$(find "$rootfs_dir/usr/lib" "$rootfs_dir/lib" \
+            \( -name 'libpoco*' -o -name 'libPoco*' \) -print -quit)"
+          test -n "$(find "$rootfs_dir/usr/lib" "$rootfs_dir/lib" \
+            -name 'libsodium.so*' -print -quit)"
+          test -e "$rootfs_dir/usr/lib/gstreamer-1.0/libgstrockchipmpp.so"
+          test -e "$rootfs_dir/usr/lib/gstreamer-1.0/libgstmatroska.so"
+
+      - name: Package ImageWriter base image
+        if: matrix.kind == 'image'
+        shell: bash
+        env:
+          TARGET_ID: ${{ matrix.id }}
+          TARGET_NAME: ${{ matrix.name }}
+          BOARD_CONFIG: ${{ matrix.board_config }}
+          BOOT_MEDIUM: ${{ matrix.boot_medium }}
+        run: |
+          set -euo pipefail
+
+          ./finish-ohd.sh
+          test -s output/genimage/sdcard.img
+
+          mkdir -p deploy
+          image_name="openhd-base-${TARGET_ID}.img"
+          metadata_name="openhd-base-${TARGET_ID}.json"
+          mv output/genimage/sdcard.img "deploy/$image_name"
+          xz -T0 -9 "deploy/$image_name"
+
+          compressed_name="${image_name}.xz"
+          compressed_size=$(stat -c '%s' "deploy/$compressed_name")
+          compressed_sha256=$(sha256sum "deploy/$compressed_name" | cut -d' ' -f1)
+
+          cat > "deploy/$metadata_name" <<EOF
+          {
+            "schema": 1,
+            "type": "openhd-base-image",
+            "target": "${TARGET_ID}",
+            "name": "${TARGET_NAME}",
+            "boot_medium": "${BOOT_MEDIUM}",
+            "board_config": "${BOARD_CONFIG}",
+            "architecture": "arm",
+            "runtime_abi": "armv7a-hardfloat-uclibc",
+            "sdk_commit": "${GITHUB_SHA}",
+            "build_sdk": "openhd-luckfox-pico-sdk.tar.gz",
+            "build_sdk_manifest": "openhd-luckfox-pico-sdk.manifest.json",
+            "image": "${compressed_name}",
+            "compression": "xz",
+            "compressed_size": ${compressed_size},
+            "sha256": "${compressed_sha256}",
+            "openhd_preinstalled": false,
+            "upgrade_archive": "openhd.tar.gz"
+          }
+          EOF
+
+          (
+            cd deploy
+            sha256sum "$compressed_name" "$metadata_name" \
+              > "openhd-base-${TARGET_ID}.sha256"
+          )
+
+      - name: Upload base image
+        if: matrix.kind == 'image'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openhd-base-${{ matrix.id }}
+          path: |
+            deploy/openhd-base-${{ matrix.id }}.img.xz
+            deploy/openhd-base-${{ matrix.id }}.json
+            deploy/openhd-base-${{ matrix.id }}.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
