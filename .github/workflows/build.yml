@@ -99,17 +99,24 @@ jobs:
           cp "$sdk_archive" "deploy/$archive_name"
 
           tar -tzf "deploy/$archive_name" > deploy/sdk-contents.txt
-          grep -q '/relocate-sdk.sh$' deploy/sdk-contents.txt
-          grep -q '/environment-setup$' deploy/sdk-contents.txt
-          grep -q '/share/buildroot/toolchainfile.cmake$' \
-            deploy/sdk-contents.txt
-          grep -q \
-            '/arm-buildroot-linux-uclibcgnueabihf/sysroot/usr/include/' \
-            deploy/sdk-contents.txt
-          grep -q 'libPocoFoundation.so' deploy/sdk-contents.txt
-          grep -q 'libgstreamer-1.0.so' deploy/sdk-contents.txt
-          grep -q 'libsodium.so' deploy/sdk-contents.txt
-          grep -q 'libpcap.so' deploy/sdk-contents.txt
+          require_sdk_entry() {
+            local pattern="$1"
+            if ! grep -q -- "$pattern" deploy/sdk-contents.txt; then
+              printf 'SDK archive missing required entry matching: %s\n' \
+                "$pattern" >&2
+              return 1
+            fi
+          }
+
+          require_sdk_entry '/relocate-sdk.sh$'
+          require_sdk_entry '/environment-setup$'
+          require_sdk_entry '/share/buildroot/toolchainfile.cmake$'
+          require_sdk_entry \
+            '/arm-buildroot-linux-uclibcgnueabihf/sysroot/usr/include/'
+          require_sdk_entry 'libPocoFoundation.so'
+          require_sdk_entry 'libgstreamer-1.0.so'
+          require_sdk_entry 'libsodium.so'
+          require_sdk_entry 'libpcap.so'
 
           archive_sha256=$(sha256sum "deploy/$archive_name" | cut -d' ' -f1)
           archive_size=$(stat -c '%s' "deploy/$archive_name")
