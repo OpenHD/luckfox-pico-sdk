@@ -70,9 +70,10 @@ jobs:
 
       - name: Build firmware and runtime libraries
         shell: bash
+        env:
+          RK_ENABLE_SAMPLE: n
         run: |
           set -euo pipefail
-          ./build.sh media
           ./build.sh
 
       - name: Package relocatable SDK/sysroot
