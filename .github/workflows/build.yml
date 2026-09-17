@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: luckfox-pico-${{ github.workflow }}-${{ github.ref }}
+  group: luckfox-pico-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
