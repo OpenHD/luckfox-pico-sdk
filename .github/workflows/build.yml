@@ -74,6 +74,9 @@ jobs:
           RK_ENABLE_SAMPLE: n
         run: |
           set -euo pipefail
+          # The Buildroot Rockchip GStreamer plugin consumes headers produced
+          # by the vendor media build, while build.sh builds the rootfs first.
+          ./build.sh media
           ./build.sh
 
       - name: Package relocatable SDK/sysroot
@@ -96,12 +99,12 @@ jobs:
           cp "$sdk_archive" "deploy/$archive_name"
 
           tar -tzf "deploy/$archive_name" > deploy/sdk-contents.txt
-          grep -q '^\./relocate-sdk.sh$' deploy/sdk-contents.txt
-          grep -q '^\./environment-setup$' deploy/sdk-contents.txt
-          grep -q '^\./share/buildroot/toolchainfile.cmake$' \
+          grep -q '/relocate-sdk.sh$' deploy/sdk-contents.txt
+          grep -q '/environment-setup$' deploy/sdk-contents.txt
+          grep -q '/share/buildroot/toolchainfile.cmake$' \
             deploy/sdk-contents.txt
           grep -q \
-            '^\./arm-buildroot-linux-uclibcgnueabihf/sysroot/usr/include/' \
+            '/arm-buildroot-linux-uclibcgnueabihf/sysroot/usr/include/' \
             deploy/sdk-contents.txt
           grep -q 'libPocoFoundation.so' deploy/sdk-contents.txt
           grep -q 'libgstreamer-1.0.so' deploy/sdk-contents.txt
