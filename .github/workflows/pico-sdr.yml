@@ -79,7 +79,7 @@ jobs:
           test -f openhd-src/OpenHD/ohd_interface/lib/devourer/CMakeLists.txt
           export OPENHD_LOCAL_SITE="$GITHUB_WORKSPACE/openhd-src"
           export OPENHD_SYSUTILS_LOCAL_SITE="$GITHUB_WORKSPACE/sysutils-src"
-          export OPENHD_PICO_BASE_ID="$(git rev-parse HEAD)-rv1106-pro-max-sd"
+          export OPENHD_PICO_BASE_ID="${GITHUB_SHA:?}-rv1106-pro-max-sd"
           # Base-image builds intentionally omit applications; enable them only here.
           printf '\nBR2_PACKAGE_OPENHD=y\nBR2_PACKAGE_OPENHD_SYSUTILS=y\n' >> \
             sysdrv/tools/board/buildroot/luckfox_pico_defconfig
@@ -101,6 +101,7 @@ jobs:
           mkdir -p deploy
           mapfile -t roots < <(find output/out -maxdepth 1 -type d -name 'rootfs_*')
           test "${#roots[@]}" -eq 1
+          test "$(cat "${roots[0]}/etc/openhd-pico-base-id")" = "${GITHUB_SHA}-rv1106-pro-max-sd"
           python3 scripts/package-pico-update.py "${roots[0]}" \
             deploy/OpenHD-Pico-RV1106.pico-ohd \
             --openhd-commit "$(git -C openhd-src rev-parse HEAD)" \

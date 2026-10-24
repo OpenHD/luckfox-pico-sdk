@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import tarfile
 import tempfile
@@ -98,6 +99,8 @@ class Slots:
                         destination.chmod(member.mode & 0o755)
             manifest = json.loads((stage / 'manifest.json').read_text())
             base_id = (self.root / 'etc/openhd-pico-base-id').read_text().strip()
+            if not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})(?:-rv1106-pro-max-sd)?', base_id):
+                raise ValueError('Missing or invalid factory base image identity')
             if (manifest['schema'], manifest['platform'], manifest['architecture'],
                     manifest['base_id']) != (1, 'luckfox-pico', 'armhf', base_id):
                 raise ValueError('Bundle does not match this Pico base image')

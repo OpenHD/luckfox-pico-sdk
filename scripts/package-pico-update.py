@@ -27,8 +27,8 @@ def target_file(root, path):
 def package(root, output, readelf, commits):
     root = root.resolve()
     base_id = (root / 'etc/openhd-pico-base-id').read_text().strip()
-    if not base_id:
-        raise ValueError('Missing base image identity')
+    if not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})(?:-rv1106-pro-max-sd)?', base_id):
+        raise ValueError('Missing or invalid base image identity')
     with tempfile.TemporaryDirectory() as work:
         stage = Path(work)
         queue = []

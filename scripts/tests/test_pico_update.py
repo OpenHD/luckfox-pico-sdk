@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
+BASE_ID = '1' * 40 + '-rv1106-pro-max-sd'
 spec = importlib.util.spec_from_file_location('pico_update', REPO /
     'sysdrv/tools/board/buildroot/package/OpenHD/pico-update.py')
 update = importlib.util.module_from_spec(spec)
@@ -24,13 +25,13 @@ class UpdateTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / 'etc').mkdir()
-        (self.root / 'etc/openhd-pico-base-id').write_text('test-base')
+        (self.root / 'etc/openhd-pico-base-id').write_text(BASE_ID)
         self.slots = update.Slots(self.root)
         self.sync = patch.object(update.os, 'sync')
         self.sync.start()
         self.addCleanup(self.sync.stop)
 
-    def bundle(self, base_id='test-base', corrupt=False, extra=None):
+    def bundle(self, base_id=BASE_ID, corrupt=False, extra=None):
         elf = b'\x7fELF\x01\x01' + bytes(12) + b'\x28\x00' + b'payload'
         files = {'usr/bin/' + name: elf for name in ('openhd', 'openhd_sys_utils')}
         manifest = dict(schema=1, platform='luckfox-pico', architecture='armhf',
@@ -121,6 +122,14 @@ class UpdateTest(unittest.TestCase):
             builder.package(self.root, output, 'readelf', dict(openhd='1', sysutils='2'))
         self.slots.install(output)
         self.assertEqual((self.slots.store / 'a/usr/lib/libsecond.so').read_bytes(), b'library2')
+
+    def test_missing_sdk_hash_is_rejected(self):
+        invalid_id = '-rv1106-pro-max-sd'
+        (self.root / 'etc/openhd-pico-base-id').write_text(invalid_id)
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            builder.package(self.root, self.root / 'bad.pico-ohd', 'readelf', {})
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            self.slots.install(self.bundle(base_id=invalid_id))
 
 
 if __name__ == '__main__':
