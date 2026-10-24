@@ -1,4 +1,8 @@
 config BR2_PACKAGE_OPENHD_SYSUTILS
     bool "openhd-sysutils"
+    select BR2_PACKAGE_LIBUSB
+    select BR2_PACKAGE_USB_MODESWITCH
+    select BR2_PACKAGE_UTIL_LINUX
+    select BR2_PACKAGE_UTIL_LINUX_BINARIES
     help
       OpenHD-SysUtils package

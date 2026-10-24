@@ -39,6 +39,7 @@ endif
 OPENHD_SYSUTILS_INSTALL_TARGET = YES
 
 # Build the daemon only; the vendor image uses BusyBox init
+OPENHD_SYSUTILS_DEPENDENCIES = libusb usb_modeswitch util-linux
 OPENHD_SYSUTILS_CONF_OPTS = -DBUILD_TESTING=OFF -DOPENHD_DEVOURER_RTL8812EU=ON
 
 # Install init.d services to target
