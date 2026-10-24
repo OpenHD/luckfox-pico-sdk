@@ -1,8 +1,10 @@
 #!/bin/sh
-[ -f /etc/profile.d/RkEnv.sh ] && source /etc/profile.d/RkEnv.sh
+[ -f /etc/profile.d/RkEnv.sh ] && . /etc/profile.d/RkEnv.sh
 
 LOG_FILE="/var/log/openhd.log"
-COMMAND="openhd"
+COMMAND="/run/openhd/current/usr/bin/openhd"
+[ -x "$COMMAND" ] || COMMAND="/usr/bin/openhd"
+export LD_LIBRARY_PATH="/run/openhd/current/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 PID_FILE="/var/run/openhd.pid"
 
 /bin/sh /oem/usr/ko/insmod_ko.sh
@@ -21,11 +23,11 @@ network_init() {
 
         if [ -f /data/ethaddr.txt ]; then
                 ethaddr2=$(cat /data/ethaddr.txt)
-                if [ $ethaddr1 == $ethaddr2 ]; then
+                if [ "$ethaddr1" = "$ethaddr2" ]; then
                         echo "eth HWaddr cfg ok"
                 else
                         ifconfig eth0 down
-                        ifconfig eth0 hw ether $ethaddr2
+                        ifconfig eth0 hw ether "$ethaddr2"
                 fi
         else
                 echo $ethaddr1 >/data/ethaddr.txt
@@ -40,7 +42,7 @@ network_init&
         cp /config/mis5001_CMK-OT2115-PC1_30IRC-F16.json /oem/usr/share/iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
     fi
     sleep 5
-    if [[ $(id -u) -ne 0 ]]; then
+    if [ $(id -u) -ne 0 ]; then
         echo "Restarting script with root privileges..." | tee -a "$LOG_FILE"
         exec sudo "$0" start
         exit 0
@@ -58,7 +60,7 @@ network_init&
 stop_openhd() {
     echo "Stopping OpenHD..." | tee -a "$LOG_FILE"
 
-    if [[ -f "$PID_FILE" ]]; then
+    if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if kill "$PID" 2>/dev/null; then
             echo "OpenHD stopped (PID: $PID)." | tee -a "$LOG_FILE"
@@ -77,9 +79,9 @@ restart_openhd() {
 }
 
 status_openhd() {
-    if [[ -f "$PID_FILE" ]]; then
+    if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
-        if ps -p "$PID" > /dev/null 2>&1; then
+        if kill -0 "$PID" 2>/dev/null; then
             echo "OpenHD is running (PID: $PID)." | tee -a "$LOG_FILE"
             exit 0
         else

@@ -51,5 +51,5 @@ echo $UDC > /sys/kernel/config/usb_gadget/rockchip/UDC
 
 #sleep 1
 echo "config usb0 IP..."
-ifconfig usb0 192.168.1.100
+ifconfig usb0 192.168.7.2 netmask 255.255.255.0
 ifconfig usb0 up

@@ -1,8 +1,10 @@
 #!/bin/sh
-[ -f /etc/profile.d/RkEnv.sh ] && source /etc/profile.d/RkEnv.sh
+[ -f /etc/profile.d/RkEnv.sh ] && . /etc/profile.d/RkEnv.sh
 
 LOG_FILE="/var/log/openhd-sys-utils.log"
-COMMAND="openhd_sys_utils"
+COMMAND="/run/openhd/current/usr/bin/openhd_sys_utils"
+[ -x "$COMMAND" ] || COMMAND="/usr/bin/openhd_sys_utils"
+export LD_LIBRARY_PATH="/run/openhd/current/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 PID_FILE="/var/run/openhd-sys-utils.pid"
 
 start_openhd_sysutils() {
@@ -20,7 +22,7 @@ start_openhd_sysutils() {
 stop_openhd_sysutils() {
     echo "Stopping OpenHD-SysUtils..." | tee -a "$LOG_FILE"
 
-    if [[ -f "$PID_FILE" ]]; then
+    if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if kill "$PID" 2>/dev/null; then
             echo "OpenHD-SysUtils stopped (PID: $PID)." | tee -a "$LOG_FILE"
@@ -39,9 +41,9 @@ restart_openhd_sysutils() {
 }
 
 status_openhd_sysutils() {
-    if [[ -f "$PID_FILE" ]]; then
+    if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
-        if ps -p "$PID" > /dev/null 2>&1; then
+        if kill -0 "$PID" 2>/dev/null; then
             echo "OpenHD-SysUtils is running (PID: $PID)." | tee -a "$LOG_FILE"
             exit 0
         else

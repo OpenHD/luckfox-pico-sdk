@@ -26,7 +26,7 @@ ifneq ($(WIFI_SDIO),)
 	PKG_CLEAN_TARGET += build-sdio-clean
 endif
 
-PKG_TARGET += build-ohd
+
 
 endif
 $(Build OpenHD drivers)
@@ -35,14 +35,7 @@ ifeq ($(M_OUT_DIR),)
 $(error Please build on upper directory)
 endif
 
-build-ohd:
-	export TopDIR=$(PWD)/wifi/rtl8812au
-	@$(MAKE) -C $(KERNEL_DIR) M=$(PWD)/wifi/rtl8812au TopDIR=$(PWD)/wifi/rtl8812au CONFIG_RTL8812AU=m modules
-	@cp $(PWD)/wifi/rtl8812au/88XXau_ohd.ko $(M_OUT_DIR)
-	@$(MAKE) -C $(KERNEL_DIR) M=$(PWD)/wifi/rtl88x2bu CONFIG_RTL8822BU=m modules
-	@cp $(PWD)/wifi/rtl88x2bu/88x2bu_ohd.ko $(M_OUT_DIR)
-	@$(MAKE) -C $(KERNEL_DIR) M=$(PWD)/wifi/rtl88x2eu CONFIG_RTL8822EU=m modules
-	@cp $(PWD)/wifi/rtl88x2eu/88x2eu_ohd.ko $(M_OUT_DIR)
+# Broadcast USB radios are owned by the userspace Devourer backend.
 
 all: $(PKG_TARGET)
 	@echo "build wifi done"

@@ -45,9 +45,10 @@ OPENHD_SUBDIR = OpenHD
 
 # Install to the target system
 OPENHD_INSTALL_TARGET = YES
+OPENHD_PICO_BASE_ID ?= $(shell sha256sum $(CONFIG_DIR)/.config | cut -d' ' -f1)
 
 # Dependencies
-OPENHD_DEPENDENCIES = poco libsodium gstreamer1 gst1-plugins-base libpcap host-pkgconf
+OPENHD_DEPENDENCIES = poco libsodium gstreamer1 gst1-plugins-base libpcap libusb librtlsdr ncurses host-pkgconf host-python3
 
 OPENHD_ARTOSYN_BUILD_DIR = $(ARTOSYN_SDK_ROOT)/host_drv/build-openhd-buildroot
 OPENHD_ARTOSYN_CLIENT_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/app/ar8030/libar8030_client.a
@@ -56,6 +57,10 @@ OPENHD_ARTOSYN_COM_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/com/libcom.a
 # CMake options
 OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
+    -DOPENHD_ENABLE_DEVOURER=ON \
+    -DBUILD_TESTING=OFF \
+    -DPython3_EXECUTABLE=$(HOST_DIR)/bin/python3 \
+    -DPYTHON_EXECUTABLE=$(HOST_DIR)/bin/python3 \
     -DCMAKE_EXE_LINKER_FLAGS="-lstdc++fs"
 
 ifneq ($(ARTOSYN_SDK_ROOT),)
@@ -119,8 +124,11 @@ define OPENHD_INSTALL_TARGET_CMDS
 	$(info OpenHD Build Directory: $(@D))
 	$(INSTALL) -D -m 0755 $(@D)/$(OPENHD_SUBDIR)/openhd $(TARGET_DIR)/usr/bin/openhd
 	$(INSTALL) -d $(TARGET_DIR)/etc/init.d
-	cp -r $(@D)/../../../package/OpenHD/start.sh $(TARGET_DIR)/etc/init.d/S99openhd
-	chmod +x $(TARGET_DIR)/etc/init.d/S99openhd
+	$(INSTALL) -D -m 0755 $(OPENHD_PKGDIR)/start.sh $(TARGET_DIR)/etc/init.d/S99openhd
+	$(INSTALL) -D -m 0755 $(OPENHD_PKGDIR)/pico-update.py $(TARGET_DIR)/usr/sbin/openhd-pico-update
+	$(INSTALL) -D -m 0755 $(OPENHD_PKGDIR)/slots.sh $(TARGET_DIR)/etc/init.d/S97openhd-slots
+	mkdir -p $(TARGET_DIR)/etc
+	printf '%s\n' '$(OPENHD_PICO_BASE_ID)' > $(TARGET_DIR)/etc/openhd-pico-base-id
 endef
 
 $(eval $(cmake-package))

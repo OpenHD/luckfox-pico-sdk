@@ -1,0 +1,110 @@
+name: Build OpenHD Pico SDR SD card
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sdcard:
+    runs-on: ubuntu-24.04
+    env:
+      FORCE_UNSAFE_CONFIGURE: "1"
+    container:
+      image: debian:bookworm
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            sudo ca-certificates git xz-utils build-essential bash ssh gcc-multilib \
+            g++-multilib expect gawk texinfo libssl-dev bison flex fakeroot cmake \
+            unzip gperf autoconf device-tree-compiler libncurses-dev pkg-config bc \
+            python-is-python3 cpio rsync wget curl genimage mtools dosfstools \
+            e2fsprogs zip file pipx
+
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+        with:
+          # Broadcast driver submodules are not used by Devourer.
+          submodules: false
+
+      - name: Checkout current OpenHD
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD
+          ref: openhd-3.0
+          path: openhd-src
+          submodules: recursive
+          token: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+
+      - name: Checkout current SysUtils
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD-SysUtils
+          ref: dev-release
+          path: sysutils-src
+          submodules: recursive
+
+      - name: Verify update lifecycle
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Build RV1106 Pico Pro Max SD image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f openhd-src/OpenHD/ohd_interface/video_crypto_private/CMakeLists.txt
+          test -f openhd-src/OpenHD/ohd_interface/lib/devourer/CMakeLists.txt
+          export OPENHD_LOCAL_SITE="$GITHUB_WORKSPACE/openhd-src"
+          export OPENHD_SYSUTILS_LOCAL_SITE="$GITHUB_WORKSPACE/sysutils-src"
+          export OPENHD_PICO_BASE_ID="$(git rev-parse HEAD)-rv1106-pro-max-sd"
+          # Base-image builds intentionally omit applications; enable them only here.
+          printf '\nBR2_PACKAGE_OPENHD=y\nBR2_PACKAGE_OPENHD_SYSUTILS=y\n' >> \
+            sysdrv/tools/board/buildroot/luckfox_pico_defconfig
+          printf '4\n0\n0\n' | ./build.sh lunch
+          ./build.sh media
+          ./build.sh
+          ./finish-ohd.sh
+
+      - name: Package image and paired application update
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy
+          mapfile -t roots < <(find output/out -maxdepth 1 -type d -name 'rootfs_*')
+          test "${#roots[@]}" -eq 1
+          python3 scripts/package-pico-update.py "${roots[0]}" \
+            deploy/OpenHD-Pico-RV1106.pico-ohd \
+            --openhd-commit "$(git -C openhd-src rev-parse HEAD)" \
+            --sysutils-commit "$(git -C sysutils-src rev-parse HEAD)"
+          xz -T0 -6 -c output/genimage/sdcard.img > deploy/sdcard-rv1106.img.xz
+          (cd deploy && sha256sum sdcard-rv1106.img.xz > sdcard-rv1106.img.xz.sha256)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openhd-pico-rv1106-sd
+          path: deploy/*
+          if-no-files-found: error
+
+      - name: Install Cloudsmith CLI
+        if: github.event_name != 'pull_request'
+        run: pipx install cloudsmith-cli
+
+      - name: Publish artifacts
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          : "${CLOUDSMITH_API_KEY:?CLOUDSMITH_API_KEY is required}"
+          version="$(date -u +'%Y-%m-%d-%H-%M-%S')"
+          for artifact in deploy/*; do
+            "$HOME/.local/bin/cloudsmith" push raw --republish \
+              --version "$version" openhd/dev-release "$artifact"
+          done

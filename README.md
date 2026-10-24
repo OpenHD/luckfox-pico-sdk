@@ -363,3 +363,8 @@ Open the menuconfig interface for buildroot.
 ## Notices
 When copying the source code package under Windows, the executable file under Linux may become a non-executable file, or the soft link fails and cannot be compiled and used.
 Therefore, please be careful not to copy the source code package under Windows.
+
+## OpenHD Pico SDR
+
+For RV1106 Pico Pro/Max SD-card images, current OpenHD/SysUtils integration
+and paired application A/B updates, see [Pico SDR](docs/pico-sdr.md).

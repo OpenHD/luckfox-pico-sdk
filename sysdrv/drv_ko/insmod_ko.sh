@@ -86,9 +86,6 @@ __insmod rve.ko
 
 # OpenHD
 __insmod cfg80211.ko
-__insmod 88XXau_ohd.ko
-__insmod 88x2bu_ohd.ko
-__insmod 88x2eu_ohd.ko
 
 udevadm control --start-exec-queue
 

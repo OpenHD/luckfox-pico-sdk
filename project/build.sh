@@ -1473,17 +1473,19 @@ ohd_init() {
 	    [ -e /Config/.config ] || FIRST_BOOT=1
 	fi
 
-        mkswap -L SWAP "$SWP_DEV" || true
+        if [ -b "$SWP_DEV" ] && ! blkid "$SWP_DEV" >/dev/null 2>&1; then
+            mkswap -L SWAP "$SWP_DEV"
+        fi
 
-	if [ -b /dev/mmcblk1 ]; then
-		DISK="/dev/mmcblk1"
-	elif [ -b /dev/mmcblk0 ]; then
-		DISK="/dev/mmcblk0"
-	fi
+	# Derive the disk from this image's recordings partition, never from
+	# whichever other SD/eMMC device happens to exist first.
+	REC_REAL=$(readlink -f "$REC_DEV")
+	DISK=
+	case "$REC_REAL" in /dev/mmcblk*p7) DISK=${REC_REAL%p7} ;; esac
 	if [ "$FIRST_BOOT" -eq 1 ]; then
 
 	    #drow RECORDINGS filesystem/partition to fill partition
-	    if [ -b "$REC_DEV" ]; then
+	    if [ -b "$REC_DEV" ] && [ -b "$DISK" ]; then
 		# Expand GPT to whole disk
 		mount
 		sgdisk -e "$DISK"
@@ -1493,7 +1495,13 @@ ohd_init() {
 		sleep 1
 		partx -u "$DISK"
 		sleep 1
-       	        yes | mkfs.msdos -F 32 "$REC_DEV"
+                # Preserve recordings on existing cards; fresh SD images
+                # start with a blank recordings partition.
+                if ! blkid "$REC_DEV" >/dev/null 2>&1; then
+                    mkfs.msdos -F 32 "$REC_DEV"
+                fi
+                touch /Config/.config
+                sync
 		reboot
 	    fi
 
