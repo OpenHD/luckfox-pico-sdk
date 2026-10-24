@@ -71,7 +71,7 @@ jobs:
       - name: Verify image partition layout
         if: matrix.kind == 'image'
         run: |
-          python3 -m unittest discover -s scripts/tests -p 'test_image_layout.py' -v
+          python3 -m unittest discover -s scripts/tests -v
           python3 scripts/check_image_layout.py .BoardConfig.mk genimage.cfg
 
       - name: Build firmware and runtime libraries
@@ -251,6 +251,16 @@ jobs:
           test -s output/genimage/sdcard.img
 
           mkdir -p deploy
+          firmware_archive=""
+          if [ "$BOOT_MEDIUM" = emmc ]; then
+            python3 scripts/package_imagewriter_firmware.py \
+              --image output/genimage/sdcard.img \
+              --loader output/image/download.bin \
+              --board-config ".BoardConfig.mk" \
+              --output deploy/firmware.zip \
+              --sdk-commit "$GITHUB_SHA"
+            firmware_archive="firmware.zip"
+          fi
           image_name="openhd-base-${TARGET_ID}.img"
           metadata_name="openhd-base-${TARGET_ID}.json"
           mv output/genimage/sdcard.img "deploy/$image_name"
@@ -274,6 +284,7 @@ jobs:
             "build_sdk": "openhd-luckfox-pico-sdk.tar.gz",
             "build_sdk_manifest": "openhd-luckfox-pico-sdk.manifest.json",
             "image": "${compressed_name}",
+            "firmware_archive": "${firmware_archive}",
             "compression": "xz",
             "compressed_size": ${compressed_size},
             "sha256": "${compressed_sha256}",
@@ -297,6 +308,8 @@ jobs:
             deploy/openhd-base-${{ matrix.id }}.img.xz
             deploy/openhd-base-${{ matrix.id }}.json
             deploy/openhd-base-${{ matrix.id }}.sha256
+            deploy/firmware.zip
+            deploy/firmware.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
