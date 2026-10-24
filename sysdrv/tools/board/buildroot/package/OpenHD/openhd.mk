@@ -57,11 +57,16 @@ OPENHD_ARTOSYN_COM_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/com/libcom.a
 # CMake options
 OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
+    -DBUILD_SHARED_LIBS=OFF \
     -DOPENHD_ENABLE_DEVOURER=ON \
     -DBUILD_TESTING=OFF \
     -DPython3_EXECUTABLE=$(HOST_DIR)/bin/python3 \
     -DPYTHON_EXECUTABLE=$(HOST_DIR)/bin/python3 \
     -DCMAKE_EXE_LINKER_FLAGS="-lstdc++fs"
+
+# Match the canonical Luckfox component builder: only the application target
+# is installed, and Devourer must be linked into it rather than shipped as a DSO.
+OPENHD_MAKE_OPTS = openhd
 
 ifneq ($(ARTOSYN_SDK_ROOT),)
 OPENHD_CONF_OPTS += -DARTOSYN_SDK_ROOT="$(ARTOSYN_SDK_ROOT)"
