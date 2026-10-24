@@ -9,11 +9,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pico-sdr-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   build-sdcard:
     runs-on: ubuntu-24.04
     env:
       FORCE_UNSAFE_CONFIGURE: "1"
+      RK_ENABLE_SAMPLE: n
     container:
       image: debian:bookworm
     steps:
@@ -25,7 +30,7 @@ jobs:
             g++-multilib expect gawk texinfo libssl-dev bison flex fakeroot cmake \
             unzip gperf autoconf device-tree-compiler libncurses-dev pkg-config bc \
             python-is-python3 cpio rsync wget curl genimage mtools dosfstools \
-            e2fsprogs zip file pipx
+            e2fsprogs zip file pipx module-assistant openssl passwd vim
 
       - name: Checkout SDK
         uses: actions/checkout@v4
@@ -41,6 +46,12 @@ jobs:
           path: openhd-src
           submodules: recursive
           token: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+
+      - name: Fetch opt-in OpenHD sources at pinned revisions
+        run: |
+          git -C openhd-src submodule update --init --recursive --checkout -- \
+            OpenHD/ohd_interface/video_crypto_private \
+            OpenHD/ohd_interface/lib/devourer
 
       - name: Checkout current SysUtils
         uses: actions/checkout@v4
@@ -66,6 +77,12 @@ jobs:
           printf '\nBR2_PACKAGE_OPENHD=y\nBR2_PACKAGE_OPENHD_SYSUTILS=y\n' >> \
             sysdrv/tools/board/buildroot/luckfox_pico_defconfig
           printf '4\n0\n0\n' | ./build.sh lunch
+          selected_config=$(basename "$(readlink -f .BoardConfig.mk)")
+          test "$selected_config" = BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk
+          # shellcheck disable=SC1091
+          source .BoardConfig.mk
+          test "$RK_BOOT_MEDIUM" = sd_card
+          test "$LF_TARGET_ROOTFS" = buildroot
           ./build.sh media
           ./build.sh
           ./finish-ohd.sh
