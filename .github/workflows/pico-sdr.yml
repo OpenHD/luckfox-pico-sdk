@@ -48,9 +48,16 @@ jobs:
           token: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
 
       - name: Fetch opt-in OpenHD sources at pinned revisions
+        env:
+          OPENHD_SUBMODULE_TOKEN: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
         run: |
+          test -n "$OPENHD_SUBMODULE_TOKEN"
+          git config --global url."https://x-access-token:${OPENHD_SUBMODULE_TOKEN}@github.com/".insteadOf \
+            https://github.com/
           git -C openhd-src submodule update --init --recursive --checkout -- \
-            OpenHD/ohd_interface/video_crypto_private \
+            OpenHD/ohd_interface/video_crypto_private
+          # Devourer's reference-driver submodules are not build dependencies.
+          git -C openhd-src submodule update --init --checkout -- \
             OpenHD/ohd_interface/lib/devourer
 
       - name: Checkout current SysUtils
