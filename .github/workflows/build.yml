@@ -68,6 +68,12 @@ jobs:
           test "$RK_BOOT_MEDIUM" = "$EXPECTED_BOOT_MEDIUM"
           test "$LF_TARGET_ROOTFS" = "buildroot"
 
+      - name: Verify image partition layout
+        if: matrix.kind == 'image'
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_image_layout.py' -v
+          python3 scripts/check_image_layout.py .BoardConfig.mk genimage.cfg
+
       - name: Build firmware and runtime libraries
         shell: bash
         env:
