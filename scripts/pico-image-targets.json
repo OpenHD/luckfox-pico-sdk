@@ -1,0 +1,44 @@
+[
+  {
+    "id": "luckfox-pico-zero",
+    "name": "Luckfox Pico Zero",
+    "board_index": 11,
+    "boot_medium": "emmc",
+    "board_config": "BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Zero-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-ultra-w",
+    "name": "Luckfox Pico Ultra W",
+    "board_index": 6,
+    "boot_medium": "emmc",
+    "board_config": "BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra_W-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-ultra",
+    "name": "Luckfox Pico Ultra",
+    "board_index": 5,
+    "boot_medium": "emmc",
+    "board_config": "BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-pro-max",
+    "name": "Luckfox Pico Pro/Max",
+    "board_index": 4,
+    "boot_medium": "sd_card",
+    "board_config": "BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-plus",
+    "name": "Luckfox Pico Plus",
+    "board_index": 2,
+    "boot_medium": "sd_card",
+    "board_config": "BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Plus-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-mini",
+    "name": "Luckfox Pico Mini",
+    "board_index": 1,
+    "boot_medium": "sd_card",
+    "board_config": "BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Mini-IPC.mk"
+  }
+]

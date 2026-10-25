@@ -1,0 +1,197 @@
+name: Build complete OpenHD Pico images
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        default: all
+    secrets:
+      OPENHD_SUBMODULE_TOKEN:
+        required: true
+      CLOUDSMITH_API_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Pico board and storage to build
+        type: choice
+        default: all
+        options:
+          - all
+          - luckfox-pico-zero
+          - luckfox-pico-ultra-w
+          - luckfox-pico-ultra
+          - luckfox-pico-pro-max
+          - luckfox-pico-plus
+          - luckfox-pico-mini
+
+permissions:
+  contents: read
+
+jobs:
+  sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.sources.outputs.matrix }}
+      sdk: ${{ steps.sources.outputs.sdk }}
+      openhd: ${{ steps.sources.outputs.openhd }}
+      sysutils: ${{ steps.sources.outputs.sysutils }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: OpenHD/luckfox-pico-sdk
+          ref: main
+          submodules: false
+      - id: sources
+        name: Resolve current sources once for every board
+        env:
+          TARGET: ${{ inputs.target }}
+          OPENHD_SUBMODULE_TOKEN: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          : "${OPENHD_SUBMODULE_TOKEN:?OpenHD private dependency token is required}"
+          : "${CLOUDSMITH_API_KEY:?Cloudsmith publication credentials are required}"
+          echo "matrix=$(python3 scripts/select_pico_targets.py "$TARGET")" >> "$GITHUB_OUTPUT"
+          echo "sdk=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          openhd=$(git ls-remote https://github.com/OpenHD/OpenHD.git refs/heads/openhd-3.0 | cut -f1)
+          sysutils=$(git ls-remote https://github.com/OpenHD/OpenHD-SysUtils.git refs/heads/dev-release | cut -f1)
+          [[ "$openhd" =~ ^[0-9a-f]{40}$ && "$sysutils" =~ ^[0-9a-f]{40}$ ]]
+          echo "openhd=$openhd" >> "$GITHUB_OUTPUT"
+          echo "sysutils=$sysutils" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: ${{ matrix.name }} with current OpenHD and SysUtils
+    needs: sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    container:
+      image: debian:bookworm
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.sources.outputs.matrix) }}
+    env:
+      FORCE_UNSAFE_CONFIGURE: "1"
+      RK_ENABLE_SAMPLE: n
+      TARGET_ID: ${{ matrix.id }}
+      BOARD_CONFIG: ${{ matrix.board_config }}
+      BOOT_MEDIUM: ${{ matrix.boot_medium }}
+      SDK_COMMIT: ${{ needs.sources.outputs.sdk }}
+      OPENHD_COMMIT: ${{ needs.sources.outputs.openhd }}
+      SYSUTILS_COMMIT: ${{ needs.sources.outputs.sysutils }}
+    steps:
+      - name: Install build and image tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            sudo ca-certificates git xz-utils build-essential bash ssh gcc-multilib \
+            g++-multilib expect gawk texinfo libssl-dev bison flex fakeroot cmake \
+            unzip gperf autoconf device-tree-compiler libncurses-dev pkg-config bc \
+            python-is-python3 cpio rsync wget curl genimage mtools dosfstools \
+            e2fsprogs zip file pipx module-assistant openssl passwd vim
+      - name: Checkout the canonical Pico SDK
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/luckfox-pico-sdk
+          ref: ${{ needs.sources.outputs.sdk }}
+          submodules: false
+      - name: Checkout current OpenHD
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD
+          ref: ${{ needs.sources.outputs.openhd }}
+          path: openhd-src
+          submodules: recursive
+          token: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+      - name: Fetch pinned Devourer and private OpenHD dependencies
+        env:
+          OPENHD_SUBMODULE_TOKEN: ${{ secrets.OPENHD_SUBMODULE_TOKEN }}
+        run: |
+          test -n "$OPENHD_SUBMODULE_TOKEN"
+          git config --global url."https://x-access-token:${OPENHD_SUBMODULE_TOKEN}@github.com/".insteadOf https://github.com/
+          git -C openhd-src submodule update --init --recursive --checkout -- OpenHD/ohd_interface/video_crypto_private
+          git -C openhd-src submodule update --init --checkout -- OpenHD/ohd_interface/lib/devourer
+      - name: Checkout current SysUtils
+        uses: actions/checkout@v4
+        with:
+          repository: OpenHD/OpenHD-SysUtils
+          ref: ${{ needs.sources.outputs.sysutils }}
+          path: sysutils-src
+          submodules: recursive
+      - name: Test board layouts and update lifecycle
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Build both applications and runtime libraries in the board SDK
+        shell: bash
+        env:
+          BOARD_INDEX: ${{ matrix.board_index }}
+        run: |
+          set -euo pipefail
+          export OPENHD_LOCAL_SITE="$GITHUB_WORKSPACE/openhd-src"
+          export OPENHD_SYSUTILS_LOCAL_SITE="$GITHUB_WORKSPACE/sysutils-src"
+          export OPENHD_PICO_BASE_ID
+          OPENHD_PICO_BASE_ID=$(printf '%s' "$SDK_COMMIT:$TARGET_ID" | sha256sum | cut -d' ' -f1)
+          for config in luckfox_pico_defconfig luckfox_pico_w_defconfig; do
+            printf '\nBR2_PACKAGE_OPENHD=y\nBR2_PACKAGE_OPENHD_SYSUTILS=y\n' >> "sysdrv/tools/board/buildroot/$config"
+          done
+          printf '%s\n0\n0\n' "$BOARD_INDEX" | ./build.sh lunch
+          test "$(basename "$(readlink -f .BoardConfig.mk)")" = "$BOARD_CONFIG"
+          # shellcheck disable=SC1091
+          source .BoardConfig.mk
+          test "$RK_BOOT_MEDIUM" = "$BOOT_MEDIUM"
+          test "$LF_TARGET_ROOTFS" = buildroot
+          python3 scripts/check_image_layout.py .BoardConfig.mk genimage.cfg
+          ./build.sh media
+          ./build.sh
+      - name: Verify components, dependencies, Devourer and maintenance access
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t roots < <(find output/out -maxdepth 1 -type d -name 'rootfs_*')
+          test "${#roots[@]}" -eq 1
+          python3 scripts/check_usb_gadget.py sysdrv/source/objs_kernel/.config "${roots[0]}"
+          mkdir -p deploy
+          python3 scripts/package-pico-update.py "${roots[0]}" "deploy/OpenHD-${TARGET_ID}.pico-ohd" \
+            --openhd-commit "$OPENHD_COMMIT" --sysutils-commit "$SYSUTILS_COMMIT"
+          python3 scripts/record_pico_components.py "${roots[0]}" output/image/rootfs.img \
+            "deploy/OpenHD-${TARGET_ID}.pico-ohd" "deploy/openhd-${TARGET_ID}.components.json" --sdk-commit "$SDK_COMMIT" \
+            --openhd-commit "$OPENHD_COMMIT" --sysutils-commit "$SYSUTILS_COMMIT" \
+            --devourer-commit "$(git -C openhd-src/OpenHD/ohd_interface/lib/devourer rev-parse HEAD)" \
+            --target "$TARGET_ID"
+      - name: Package complete SD or eMMC image for ImageWriter
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./finish-ohd.sh
+          if [ "$BOOT_MEDIUM" = emmc ]; then
+            python3 scripts/package_imagewriter_firmware.py --image output/genimage/sdcard.img \
+              --loader output/image/download.bin --board-config .BoardConfig.mk \
+              --output deploy/firmware.zip --sdk-commit "$SDK_COMMIT"
+          fi
+          xz -T0 -6 -c output/genimage/sdcard.img > "deploy/openhd-${TARGET_ID}.img.xz"
+          (cd deploy && sha256sum ./*.img.xz ./*.components.json > "openhd-${TARGET_ID}.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openhd-image-${{ matrix.id }}
+          path: deploy/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Publish board images and paired applications
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          : "${CLOUDSMITH_API_KEY:?CLOUDSMITH_API_KEY is required}"
+          pipx install cloudsmith-cli
+          version="$(date -u +'%Y-%m-%d-%H-%M-%S')"
+          for artifact in deploy/*; do
+            name=$(basename "$artifact")
+            # firmware.zip must retain its name inside each GitHub artifact;
+            # use a board-specific feed name to avoid cross-board collisions.
+            case "$name" in firmware.zip*) name="openhd-${TARGET_ID}-${name}" ;; esac
+            "$HOME/.local/bin/cloudsmith" push raw --republish --name "$name" \
+              --version "$version" openhd/dev-release "$artifact"
+          done
