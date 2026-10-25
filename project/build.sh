@@ -1903,7 +1903,14 @@ function parse_partition_file() {
 
 	cat >>$RK_PROJECT_FILE_ROOTFS_SCRIPT <<'EOF'
 linkdev() {
-    DEVBASE="${1:-/dev/mmcblk1}"
+    DEVBASE="$1"
+    if [ -z "$DEVBASE" ]; then
+        case "$bootmedium" in
+            emmc) DEVBASE=/dev/mmcblk0 ;;
+            sd_card) DEVBASE=/dev/mmcblk1 ;;
+            *) return 0 ;;
+        esac
+    fi
     DEVBLK="$(basename "$DEVBASE")"
     BYNAME="/dev/block/by-name"
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check the resolved kernel and rootfs needed for Pico USB maintenance."""
+"""Check the resolved kernel and rootfs needed for Pico maintenance access."""
 import argparse
 import os
 from pathlib import Path
+import re
 
 REQUIRED = (
     'CONFIG_USB', 'CONFIG_USB_DWC3', 'CONFIG_USB_DWC3_DUAL_ROLE',
@@ -20,7 +21,11 @@ def check(kernel_config, rootfs):
         path = rootfs / name
         if not path.is_file() or not os.access(path, os.X_OK):
             raise ValueError('Missing executable USB maintenance component: ' + name)
-    print('Verified built-in DWC3 host/device, ADB FunctionFS, RNDIS, and executable ADB startup')
+    interfaces = (rootfs / 'etc/network/interfaces').read_text()
+    if not re.search(r'^auto\s+eth0\s*$', interfaces, re.M) or not re.search(
+            r'^iface\s+eth0\s+inet\s+dhcp\s*$', interfaces, re.M):
+        raise ValueError('Ethernet maintenance DHCP is missing from the base rootfs')
+    print('Verified built-in DWC3 host/device, ADB FunctionFS, RNDIS, executable ADB startup and Ethernet DHCP')
 
 
 if __name__ == '__main__':
