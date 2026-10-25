@@ -173,7 +173,21 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: openhd-image-${{ matrix.id }}
-          path: deploy/*
+          # The SD writer streams the first file in a GitHub artifact ZIP.
+          # Keep application updates and manifests in a separate artifact.
+          path: |
+            deploy/*.img.xz
+            deploy/firmware.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openhd-components-${{ matrix.id }}
+          path: |
+            deploy/*.components.json
+            deploy/*.pico-ohd
+            deploy/*.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
