@@ -43,7 +43,7 @@ class PicoImageTest(unittest.TestCase):
         self.update = Path(self.temp.name) / 'update.pico-ohd'
         self.commits = dict(sdk='1' * 40, openhd='2' * 40, sysutils='3' * 40, devourer='4' * 40)
         self.files = {
-            'usr/bin/openhd': b'ARM fixture Devourer identified',
+            'usr/bin/openhd': b'ARM fixture Devourer identified packet-address=mb-valid',
             'usr/bin/openhd_sys_utils': b'ARM fixture SysUtils',
             'usr/lib/libdependency.so.1': b'runtime dependency',
         }
@@ -111,6 +111,13 @@ class PicoImageTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.inspect()
                 (self.root / name).unlink()
+
+    def test_rejects_old_venc_packet_address(self):
+        self.files['usr/bin/openhd'] = b'ARM fixture Devourer identified'
+        self.write('usr/bin/openhd', self.files['usr/bin/openhd'])
+        self.bundle()
+        with self.assertRaisesRegex(ValueError, 'packet-address fix'):
+            self.inspect()
 
     def test_rejects_openhd_without_devourer(self):
         self.files['usr/bin/openhd'] = b'ARM fixture without radio backend'

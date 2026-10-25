@@ -9,12 +9,15 @@
 umask 077
 
 start() {
-	chown root:root /var/empty/
+	mkdir -p /var/empty /var/lock /run/sshd /etc/ssh || return 1
+	chown root:root /var/empty/ || return 1
+	chmod 755 /var/empty /run/sshd || return 1
 	# Create any missing keys
-	/usr/bin/ssh-keygen -A
+	/usr/bin/ssh-keygen -A || return 1
 
 	printf "Starting sshd: "
-	/usr/sbin/sshd
+	/usr/sbin/sshd -t || return 1
+	/usr/sbin/sshd || return 1
 	touch /var/lock/sshd
 	echo "OK"
 }

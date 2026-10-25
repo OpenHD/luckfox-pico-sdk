@@ -1,0 +1,135 @@
+#!/usr/bin/python3
+"""Ultra onboard SDIO AP backend for OpenHD on BusyBox, without NetworkManager."""
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+RUN = Path('/run/openhd')
+CONFIG = RUN / 'pico-hostapd.conf'
+STATE = RUN / 'pico-hotspot.json'
+
+def allowed_board(model):
+    return model.rstrip('\0').startswith('Luckfox Pico Ultra')
+
+def interface_from_config(text):
+    names = [line.split('=', 1)[1] for line in text.splitlines() if line.startswith('interface=')]
+    if len(names) != 1 or not re.fullmatch(r'[a-zA-Z0-9_-]{1,15}', names[0]):
+        raise ValueError('Invalid hotspot interface')
+    return names[0]
+
+def run(*args):
+    subprocess.run(args, check=True)
+
+def owned_pid(name):
+    try:
+        pid = int((RUN / ('pico-' + name + '.pid')).read_text())
+        if pid <= 1 or Path('/proc/%d/comm' % pid).read_text().strip() != name:
+            return None
+        return pid
+    except (ValueError, OSError):
+        return None
+
+def stop():
+    for name in ('dnsmasq', 'hostapd'):
+        pid = owned_pid(name)
+        if pid:
+            os.kill(pid, signal.SIGTERM)
+            deadline = time.monotonic() + 2
+            while Path('/proc/%d' % pid).exists() and time.monotonic() < deadline:
+                time.sleep(.05)
+            if owned_pid(name) == pid:
+                os.kill(pid, signal.SIGKILL)
+        (RUN / ('pico-' + name + '.pid')).unlink(missing_ok=True)
+    STATE.unlink(missing_ok=True)
+
+def ap_enabled(iface):
+    if not owned_pid('hostapd') or not owned_pid('dnsmasq'):
+        return False
+    client = RUN / ('pico-hostapd-status-%d' % os.getpid())
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        s.settimeout(1)
+        s.bind(str(client))
+        s.connect(str(RUN / 'hostapd' / iface))
+        s.send(b'STATUS')
+        return b'state=ENABLED' in s.recv(8192).splitlines()
+    except OSError:
+        return False
+    finally:
+        s.close()
+        client.unlink(missing_ok=True)
+
+def release_station(iface):
+    # Release only this vendor's station manager and this interface's clients.
+    # Ethernet udhcpc and USB broadcast radios are untouched.
+    for item in Path('/proc').iterdir():
+        if not item.name.isdecimal():
+            continue
+        try:
+            args = (item / 'cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
+            name = Path(args[0]).name if args else ''
+            owns_iface = any(a == '-i' and i+1 < len(args) and args[i+1] == iface
+                             or a == '-i' + iface for i, a in enumerate(args))
+            if name == 'rkwifi_server' or name in ('wpa_supplicant', 'udhcpc') and owns_iface:
+                os.kill(int(item.name), signal.SIGTERM)
+        except (OSError, UnicodeError, ValueError):
+            pass
+
+def start(iface):
+    stop()
+    release_station(iface)
+    time.sleep(.3)
+    run('ip', 'link', 'set', iface, 'down')
+    run('ip', 'addr', 'flush', 'dev', iface)
+    run('ip', 'addr', 'add', '192.168.3.1/24', 'dev', iface)
+    run('ip', 'link', 'set', iface, 'up')
+    try:
+        run('hostapd', '-B', '-P', str(RUN / 'pico-hostapd.pid'), str(CONFIG))
+        run('dnsmasq', '--conf-file=', '--interface=' + iface, '--bind-interfaces',
+            '--port=0', '--dhcp-authoritative',
+            '--dhcp-range=192.168.3.20,192.168.3.100,255.255.255.0,12h',
+            '--dhcp-option=3,192.168.3.1', '--dhcp-option=6',
+            '--dhcp-leasefile=' + str(RUN / 'pico-hotspot.leases'),
+            '--pid-file=' + str(RUN / 'pico-dnsmasq.pid'))
+        for _ in range(25):
+            if ap_enabled(iface):
+                STATE.write_text(json.dumps(dict(active=True, interface=iface, address='192.168.3.1')) + '\n')
+                return
+            time.sleep(.2)
+        raise RuntimeError('Access point did not reach ENABLED state')
+    except Exception:
+        stop()
+        raise
+
+def main():
+    if os.geteuid() != 0:
+        raise RuntimeError('Root required')
+    if not allowed_board(Path('/proc/device-tree/model').read_text()):
+        raise RuntimeError('Pico hotspot is supported only on Ultra boards')
+    iface = interface_from_config(CONFIG.read_text())
+    if Path('/sys/class/net', iface, 'device/subsystem').resolve().name != 'sdio':
+        raise RuntimeError('Hotspot requires the onboard SDIO radio')
+    action = sys.argv[1] if len(sys.argv) == 2 else ''
+    if action == 'start':
+        start(iface)
+    elif action == 'stop':
+        stop()
+        subprocess.run(['ip', 'addr', 'del', '192.168.3.1/24', 'dev', iface], check=False)
+    elif action == 'status':
+        return 0 if ap_enabled(iface) else 1
+    else:
+        raise ValueError('Usage: openhd-pico-hotspot start|stop|status')
+    return 0
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except Exception as error:
+        print('Pico hotspot: ' + str(error), file=sys.stderr)
+        sys.exit(1)

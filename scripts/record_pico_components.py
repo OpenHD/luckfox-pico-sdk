@@ -46,6 +46,8 @@ def inspect(root, update, target, commits):
             raise ValueError('Missing application startup: ' + name)
     if b'Devourer identified' not in (root / 'usr/bin/openhd').read_bytes():
         raise ValueError('OpenHD does not contain Devourer radio discovery')
+    if b'packet-address=mb-valid' not in (root / 'usr/bin/openhd').read_bytes():
+        raise ValueError('Pico VENC packet-address fix is missing')
     for name in ('lib/modprobe.d/openhd-devourer-eu.conf',
                  'lib/udev/rules.d/70-openhd-devourer-eu.rules',
                  'usr/local/share/OpenHD/SysUtils/wifi_cards.json'):

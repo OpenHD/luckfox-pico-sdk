@@ -1,0 +1,17 @@
+#!/bin/sh
+# The RV1106 may generate a new Ethernet address on every boot. Restore it
+# before S40network requests a DHCP lease, independently of OpenHD startup.
+[ "$1" = start ] || exit 0
+[ -e /sys/class/net/eth0/address ] || exit 0
+# Do not reconfigure an interface carrying an NFS root filesystem.
+grep -q ' / nfs' /proc/mounts && exit 0
+MAC_FILE=/userdata/openhd-ethernet.mac
+[ -d /userdata ] || exit 1
+if [ ! -s "$MAC_FILE" ]; then
+    cat /sys/class/net/eth0/address > "$MAC_FILE" || exit 1
+fi
+mac=$(cat "$MAC_FILE")
+echo "$mac" | grep -Eq '^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$' || exit 1
+[ "$mac" != 00:00:00:00:00:00 ] || exit 1
+[ "$(cat /sys/class/net/eth0/address)" = "$mac" ] && exit 0
+ip link set eth0 down && ip link set eth0 address "$mac"

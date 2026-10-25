@@ -400,6 +400,13 @@ usb_device_stop()
 case "$1" in
 start)
 	ifconfig lo up
+	# Host-mode images use this connector for the broadcast radio. Network ADB
+	# remains available; do not bind a FunctionFS/RNDIS gadget to a host port.
+	if [ -r /proc/device-tree/usbdrd/usb@ffb00000/dr_mode ] &&
+	   [ "$(tr -d '\000' < /proc/device-tree/usbdrd/usb@ffb00000/dr_mode)" = host ]; then
+		start-stop-daemon --start --quiet --background --exec /usr/bin/adbd
+		exit $?
+	fi
 	# The maintenance gadget defaults to ADB and RNDIS on a fresh image.
 	# Keep an existing selection supplied by another USB application.
 	if [ ! -e "$USB_CONFIG_FILE" ]; then

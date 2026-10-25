@@ -94,7 +94,10 @@ jobs:
           ./build.sh
           rootfs_dir=$(find output/out -maxdepth 1 -type d -name 'rootfs_*' -print -quit)
           test -n "$rootfs_dir"
-          python3 scripts/check_usb_gadget.py sysdrv/source/objs_kernel/.config "$rootfs_dir"
+          source .BoardConfig.mk
+          kernel_dtb="sysdrv/source/objs_kernel/arch/arm/boot/dts/${RK_KERNEL_DTS%.dts}.dtb"
+          test -s "$kernel_dtb"
+          python3 scripts/check_usb_gadget.py sysdrv/source/objs_kernel/.config "$rootfs_dir" --dtb "$kernel_dtb"
           ./finish-ohd.sh
 
       - name: Package image and paired application update

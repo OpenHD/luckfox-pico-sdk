@@ -18,8 +18,8 @@ index c4c00d7..0004f2c 100644
      //    local_init(port);
 -    //} else 
 -    if (!usb) {
-+    //} else if (!usb) 
-+    if (usb) {
++    // Network ADB must also work with a USB host-mode radio.
++    {
          printf("Using USB\n");
          // listen on default port
          local_init(DEFAULT_ADB_LOCAL_TRANSPORT_PORT);

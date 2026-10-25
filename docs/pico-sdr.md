@@ -11,11 +11,32 @@ in the vendor SDK. SysUtils receives its Wi-Fi database and USB ownership
 policy, and the image includes libusb, librtlsdr, ncurses and host Python for
 the current OpenHD build.
 
-USB gadget maintenance uses `192.168.7.2/24` when the port supports peripheral
-mode. Set the host to an unused address in that subnet (for example
-`192.168.7.42`), then connect QOpenHD by TCP to `192.168.7.2:5760`.
-The USB radio still needs a host-mode port; this change does not change the
-board's USB wiring or device-tree port mode.
+The six OpenHD image targets use USB **host mode** for Devourer broadcast
+radios, including Ultra W and Zero. Connect the radio with the appropriate
+host adapter and power supply. Ethernet DHCP, SSH and network ADB remain the
+maintenance path. The same connector cannot simultaneously operate as an
+ADB/RNDIS peripheral and a USB radio host. Onboard SDIO Wi-Fi is independent.
+
+**Ultra/Ultra W USB-A:** the board's hardware switch disconnects USB-A data
+when USB-C provides power. Power the board through PoE or its supported GPIO
+power input and disconnect USB-C to use a radio in USB-A. Software host mode
+does not override this switch. See [Luckfox's USB guide](https://wiki.luckfox.com/Luckfox-Pico-Ultra/USB/).
+
+SDK CI verifies the resolved DTB is in host mode. ImageBuilder verifies the
+boot partition again and requires the corrected VENC packet-address backend.
+Old peripheral-mode bases must be rebuilt before application assembly.
+
+Changing applications alone does not update this device-tree setting: install
+a new board-specific firmware image to switch an existing peripheral image.
+
+## Ultra onboard hotspot
+
+Only Ultra-family Pico boards offer the hotspot controls; the onboard SDIO
+radio is reserved for this purpose. USB Devourer radios cannot be selected as
+hotspot interfaces. On Buildroot, OpenHD starts hostapd and dnsmasq directly,
+without NetworkManager. It reports enabled only after hostapd reaches ENABLED
+and DHCP is running. Clients use `192.168.3.1`; the default password remains
+`openhdopenhd`. The configured SSID/password and on/off setting are preserved.
 
 ## Application updates
 

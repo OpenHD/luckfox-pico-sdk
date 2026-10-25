@@ -57,12 +57,23 @@ OPENHD_ARTOSYN_COM_LIB = $(OPENHD_ARTOSYN_BUILD_DIR)/com/libcom.a
 # CMake options
 OPENHD_CONF_OPTS = \
     -DENABLE_USB_CAMERAS=OFF \
+    -DENABLE_GSTREAMER=OFF \
+    -DOPENHD_MPP_ONLY=ON \
+    -DOPENHD_PICO_MPI=ON \
     -DBUILD_SHARED_LIBS=OFF \
     -DOPENHD_ENABLE_DEVOURER=ON \
     -DBUILD_TESTING=OFF \
     -DPython3_EXECUTABLE=$(HOST_DIR)/bin/python3 \
     -DPYTHON_EXECUTABLE=$(HOST_DIR)/bin/python3 \
     -DCMAKE_EXE_LINKER_FLAGS="-lstdc++fs"
+
+OPENHD_PICO_MEDIA_DIR = $(abspath $(OPENHD_PKGDIR)/../../../../../../media)
+OPENHD_PICO_AIQ_DIR = $(OPENHD_PICO_MEDIA_DIR)/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf
+OPENHD_CONF_OPTS += \
+    -DPICO_MPI_INCLUDE_DIR=$(OPENHD_PICO_MEDIA_DIR)/rockit/rockit/mpi/sdk/include \
+    -DPICO_MPI_LIBRARY=$(OPENHD_PICO_MEDIA_DIR)/rockit/rockit/lib/lib32/librockit.so \
+    -DPICO_RKAIQ_INCLUDE_DIR=$(OPENHD_PICO_AIQ_DIR)/include/rkaiq/uAPI2 \
+    -DPICO_RKAIQ_LIBRARY=$(OPENHD_PICO_AIQ_DIR)/lib/librkaiq.so
 
 # Match the canonical Luckfox component builder: only the application target
 # is installed, and Devourer must be linked into it rather than shipped as a DSO.

@@ -1,116 +1,64 @@
 #!/bin/sh
 [ -f /etc/profile.d/RkEnv.sh ] && . /etc/profile.d/RkEnv.sh
-
-LOG_FILE="/var/log/openhd.log"
-COMMAND="/run/openhd/current/usr/bin/openhd"
-[ -x "$COMMAND" ] || COMMAND="/usr/bin/openhd"
 export LD_LIBRARY_PATH="/run/openhd/current/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-PID_FILE="/var/run/openhd.pid"
-
-/bin/sh /oem/usr/ko/insmod_ko.sh
-
-network_init() {
-    LOCK=/run/network_init.lock
-
-    # if lock exists and process is alive, exit
-    if [ -e "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
-        echo "network_init already running"
-        return
+mkdir -p /var/log /var/run
+# Boot invokes this script too, but SysUtils exclusively owns automatic startup.
+# For a manual start use: OPENHD_SYSUTILS_START=1 /etc/init.d/S99openhd start
+if [ "$1" = start ] && [ "${OPENHD_SYSUTILS_START:-0}" != 1 ]; then
+    echo "OpenHD startup is managed by SysUtils"
+    exit 0
+fi
+LOG_FILE=/var/log/openhd.log
+PID_FILE=/var/run/openhd.pid
+COMMAND=/run/openhd/current/usr/bin/openhd
+[ -x "$COMMAND" ] || COMMAND=/usr/bin/openhd
+prepare_start() {
+    if [ -f /oem/usr/ko/insmod_ko.sh ]; then
+        /bin/sh /oem/usr/ko/insmod_ko.sh >> "$LOG_FILE" 2>&1
     fi
-
-    echo $$ > "$LOCK"
-        ethaddr1=$(ifconfig -a | grep "eth.*HWaddr" | awk '{print $5}')
-
-        if [ -f /data/ethaddr.txt ]; then
-                ethaddr2=$(cat /data/ethaddr.txt)
-                if [ "$ethaddr1" = "$ethaddr2" ]; then
-                        echo "eth HWaddr cfg ok"
-                else
-                        ifconfig eth0 down
-                        ifconfig eth0 hw ether "$ethaddr2"
-                fi
-        else
-                echo $ethaddr1 >/data/ethaddr.txt
-        fi
-        ifconfig eth0 up && udhcpc -i eth0 >/dev/null 2>&1
+    if [ -f /config/mis5001_CMK-OT2115-PC1_30IRC-F16.json ]; then
+        cp /config/mis5001_CMK-OT2115-PC1_30IRC-F16.json /oem/usr/share/iqfiles/ || return 1
+    fi
+    return 0
 }
 
-start_openhd() {
-network_init&
-    echo "Starting OpenHD..." | tee -a "$LOG_FILE"
-    if [ -f "/config/mis5001_CMK-OT2115-PC1_30IRC-F16.json" ]; then
-        cp /config/mis5001_CMK-OT2115-PC1_30IRC-F16.json /oem/usr/share/iqfiles/mis5001_CMK-OT2115-PC1_30IRC-F16.json
+running() {
+    [ -r "$PID_FILE" ] || return 1
+    PID=$(cat "$PID_FILE")
+    case "$PID" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$PID" -gt 1 ] && kill -0 "$PID" 2>/dev/null &&
+        [ "$(readlink -f /proc/$PID/exe)" = "$(readlink -f "$COMMAND")" ]
+}
+stop_service() {
+    if running; then
+        kill "$PID" || return 1
+        count=0
+        while running; do
+            count=$((count + 1))
+            [ "$count" -lt 10 ] || { echo "Timed out stopping $COMMAND" >&2; return 1; }
+            sleep 1
+        done
     fi
-    sleep 5
-    if [ $(id -u) -ne 0 ]; then
-        echo "Restarting script with root privileges..." | tee -a "$LOG_FILE"
-        exec sudo "$0" start
-        exit 0
-    fi
-
-    stop_openhd  # Ensure no previous instance is running
-
-    # Run OpenHD in the background
-    nohup $COMMAND >> "$LOG_FILE" 2>&1 &
+    rm -f "$PID_FILE"
+}
+start_service() {
+    running && return 0
+    [ -x "$COMMAND" ] || { echo "Missing executable: $COMMAND" >&2; return 1; }
+    prepare_start || return 1
+    nohup "$COMMAND" >> "$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
-
-    echo "OpenHD started successfully with PID $(cat $PID_FILE)!" | tee -a "$LOG_FILE"
-}
-
-stop_openhd() {
-    echo "Stopping OpenHD..." | tee -a "$LOG_FILE"
-
-    if [ -f "$PID_FILE" ]; then
-        PID=$(cat "$PID_FILE")
-        if kill "$PID" 2>/dev/null; then
-            echo "OpenHD stopped (PID: $PID)." | tee -a "$LOG_FILE"
-        else
-            echo "Failed to stop OpenHD. Process might not exist." | tee -a "$LOG_FILE"
-        fi
+    sleep 1
+    if ! running; then
+        echo "Failed to start $COMMAND; see $LOG_FILE" >&2
         rm -f "$PID_FILE"
-    else
-        echo "OpenHD is not running." | tee -a "$LOG_FILE"
+        return 1
     fi
+    echo "Started $COMMAND (PID $PID)"
 }
-
-restart_openhd() {
-    stop_openhd
-    start_openhd
-}
-
-status_openhd() {
-    if [ -f "$PID_FILE" ]; then
-        PID=$(cat "$PID_FILE")
-        if kill -0 "$PID" 2>/dev/null; then
-            echo "OpenHD is running (PID: $PID)." | tee -a "$LOG_FILE"
-            exit 0
-        else
-            echo "OpenHD is not running, but PID file exists." | tee -a "$LOG_FILE"
-            exit 1
-        fi
-    else
-        echo "OpenHD is not running." | tee -a "$LOG_FILE"
-        exit 1
-    fi
-}
-
 case "$1" in
-    start)
-        start_openhd
-        ;;
-    stop)
-        stop_openhd
-        ;;
-    restart)
-        restart_openhd
-        ;;
-    status)
-        status_openhd
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|restart|status}" | tee -a "$LOG_FILE"
-        exit 1
-        ;;
+    start) start_service ;;
+    stop) stop_service ;;
+    restart) stop_service && start_service ;;
+    status) running ;;
+    *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;
 esac
-
-exit 0
