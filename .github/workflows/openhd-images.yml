@@ -187,11 +187,17 @@ jobs:
           : "${CLOUDSMITH_API_KEY:?CLOUDSMITH_API_KEY is required}"
           pipx install cloudsmith-cli
           version="$(date -u +'%Y-%m-%d-%H-%M-%S')"
+          mkdir -p publish
           for artifact in deploy/*; do
             name=$(basename "$artifact")
             # firmware.zip must retain its name inside each GitHub artifact;
             # use a board-specific feed name to avoid cross-board collisions.
             case "$name" in firmware.zip*) name="openhd-${TARGET_ID}-${name}" ;; esac
+            cp "$artifact" "publish/$name"
+            if [ "$(basename "$artifact")" = firmware.zip.sha256 ]; then
+              printf '%s  %s\n' "$(sha256sum deploy/firmware.zip | cut -d' ' -f1)" \
+                "openhd-${TARGET_ID}-firmware.zip" > "publish/$name"
+            fi
             "$HOME/.local/bin/cloudsmith" push raw --republish --name "$name" \
-              --version "$version" openhd/dev-release "$artifact"
+              --version "$version" openhd/dev-release "publish/$name"
           done
