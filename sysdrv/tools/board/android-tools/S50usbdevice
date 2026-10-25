@@ -26,6 +26,7 @@ USB_CONFIGFS_DIR=${CONFIGFS_DIR}/usb_gadget/${USB_GROUP}
 USB_STRINGS_DIR=${USB_CONFIGFS_DIR}/strings/${USB_ATTRIBUTE}
 USB_FUNCTIONS_DIR=${USB_CONFIGFS_DIR}/functions
 USB_CONFIGS_DIR=${USB_CONFIGFS_DIR}/configs/${USB_SKELETON}
+USB_CONFIG_FILE=${USB_CONFIG_FILE:-/tmp/.usb_config}
 
 # For VBUS_ALWAYS_ON usb otg is not support ums
 # Since the block to ums is always occupated by USB due to no disconneted state
@@ -399,6 +400,11 @@ usb_device_stop()
 case "$1" in
 start)
 	ifconfig lo up
+	# The maintenance gadget defaults to ADB and RNDIS on a fresh image.
+	# Keep an existing selection supplied by another USB application.
+	if [ ! -e "$USB_CONFIG_FILE" ]; then
+		printf '%s\n' usb_adb_en usb_rndis_en > "$USB_CONFIG_FILE" || exit 1
+	fi
 #	if [ ! -e "/tmp/.usb_config" ]; then
 #		echo "$0: Cannot find .usb_config"
 #		# exit 0

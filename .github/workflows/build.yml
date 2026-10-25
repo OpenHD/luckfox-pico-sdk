@@ -84,6 +84,9 @@ jobs:
           # by the vendor media build, while build.sh builds the rootfs first.
           ./build.sh media
           ./build.sh
+          rootfs_dir=$(find output/out -maxdepth 1 -type d -name 'rootfs_*' -print -quit)
+          test -n "$rootfs_dir"
+          python3 scripts/check_usb_gadget.py sysdrv/source/objs_kernel/.config "$rootfs_dir"
 
       - name: Package relocatable SDK/sysroot
         if: matrix.kind == 'sdk'

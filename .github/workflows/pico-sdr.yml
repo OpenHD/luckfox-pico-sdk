@@ -92,6 +92,9 @@ jobs:
           test "$LF_TARGET_ROOTFS" = buildroot
           ./build.sh media
           ./build.sh
+          rootfs_dir=$(find output/out -maxdepth 1 -type d -name 'rootfs_*' -print -quit)
+          test -n "$rootfs_dir"
+          python3 scripts/check_usb_gadget.py sysdrv/source/objs_kernel/.config "$rootfs_dir"
           ./finish-ohd.sh
 
       - name: Package image and paired application update
