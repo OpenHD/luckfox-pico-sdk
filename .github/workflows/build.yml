@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      target:
+        type: string
+        default: sdk
+        description: "sdk, all, or a Pico target ID"
 
 permissions:
   contents: read
@@ -14,7 +19,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.select.outputs.include }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: select
+        env:
+          TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'all' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          from pathlib import Path
+          target = os.environ['TARGET']
+          rows = json.loads(Path('scripts/pico-image-targets.json').read_text())
+          if target == 'sdk':
+              rows = [dict(kind='sdk', id='luckfox-pico-sdk', name='SDK/sysroot', board_index=4, boot_medium='sd_card', board_config='BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk')]
+          else:
+              rows = [dict(row, kind='image') for row in rows if target == 'all' or row['id'] == target]
+          assert rows, 'Unknown Pico target: ' + target
+          print('include=' + json.dumps(rows, separators=(',', ':')))
+          PY
   build:
+    needs: matrix
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -24,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '[{"kind":"sdk","id":"luckfox-pico-sdk","name":"SDK/sysroot","board_index":4,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk"}]' || '[{"kind":"image","id":"luckfox-pico-zero","name":"Luckfox Pico Zero base image","board_index":11,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Zero-IPC.mk"},{"kind":"image","id":"luckfox-pico-ultra-w","name":"Luckfox Pico Ultra W base image","board_index":6,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra_W-IPC.mk"},{"kind":"image","id":"luckfox-pico-ultra","name":"Luckfox Pico Ultra base image","board_index":5,"boot_medium":"emmc","board_config":"BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra-IPC.mk"},{"kind":"image","id":"luckfox-pico-pro-max","name":"Luckfox Pico Pro/Max base image","board_index":4,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1106_Luckfox_Pico_Pro_Max-IPC.mk"},{"kind":"image","id":"luckfox-pico-plus","name":"Luckfox Pico Plus base image","board_index":2,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Plus-IPC.mk"},{"kind":"image","id":"luckfox-pico-mini","name":"Luckfox Pico Mini base image","board_index":1,"boot_medium":"sd_card","board_config":"BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Mini-IPC.mk"}]') }}
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
 
     container:
       image: debian:bookworm
@@ -38,7 +66,7 @@ jobs:
             device-tree-compiler dosfstools expect fakeroot file flex g++ \
             g++-multilib gawk gcc gcc-multilib genimage git gperf libncurses5-dev \
             libssl-dev make module-assistant mtools openssh-client openssl passwd \
-            pipx pkg-config python-is-python3 rsync ssh sudo texinfo unzip vim \
+            pipx pkg-config python-is-python3 rsync ssh sudo texinfo u-boot-tools unzip vim \
             wget xz-utils
           echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
 
@@ -57,8 +85,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # All selected targets use boot-medium option 0 and Buildroot option 0.
-          printf '%s\n0\n0\n' "$BOARD_INDEX" | ./build.sh lunch
+          if [ "$EXPECTED_BOOT_MEDIUM" = spi_nand ]; then
+            ln -rfs "project/cfg/BoardConfig_IPC/$EXPECTED_CONFIG" .BoardConfig.mk
+          else
+            printf '%s\n0\n0\n' "$BOARD_INDEX" | ./build.sh lunch
+          fi
 
           selected_config=$(basename "$(readlink -f .BoardConfig.mk)")
           test "$selected_config" = "$EXPECTED_CONFIG"
@@ -72,7 +103,9 @@ jobs:
         if: matrix.kind == 'image'
         run: |
           python3 -m unittest discover -s scripts/tests -v
-          python3 scripts/check_image_layout.py .BoardConfig.mk genimage.cfg
+          if [ "${{ matrix.boot_medium }}" != spi_nand ]; then
+            python3 scripts/check_image_layout.py .BoardConfig.mk genimage.cfg
+          fi
 
       - name: Build firmware and runtime libraries
         shell: bash
@@ -82,8 +115,16 @@ jobs:
           set -euo pipefail
           # The Buildroot Rockchip GStreamer plugin consumes headers produced
           # by the vendor media build, while build.sh builds the rootfs first.
-          ./build.sh media
-          ./build.sh
+          if [ "${{ matrix.boot_medium }}" = spi_nand ]; then
+            ./build.sh uboot
+            ./build.sh driver
+            ./build.sh rootfs
+            ./build.sh media
+            ./build.sh firmware
+          else
+            ./build.sh media
+            ./build.sh
+          fi
           rootfs_dir=$(find output/out -maxdepth 1 -type d -name 'rootfs_*' -print -quit)
           test -n "$rootfs_dir"
           source .BoardConfig.mk
@@ -235,6 +276,10 @@ jobs:
           test ! -e "$rootfs_dir/etc/init.d/S99openhd"
           test ! -e "$rootfs_dir/etc/init.d/S98openhd-sysutils"
 
+          if [ "${{ matrix.boot_medium }}" = spi_nand ]; then
+            python3 -c "import sys; sys.path.insert(0, 'scripts'); from pathlib import Path; from pico_nand import check_root; check_root(Path('$rootfs_dir'))"
+            exit 0
+          fi
           test -n "$(find "$rootfs_dir/usr/lib" "$rootfs_dir/lib" \
             \( -name 'libpoco*' -o -name 'libPoco*' \) -print -quit)"
           test -n "$(find "$rootfs_dir/usr/lib" "$rootfs_dir/lib" \
@@ -243,7 +288,7 @@ jobs:
           test -e "$rootfs_dir/usr/lib/gstreamer-1.0/libgstmatroska.so"
 
       - name: Package ImageWriter base image
-        if: matrix.kind == 'image'
+        if: matrix.kind == 'image' && matrix.boot_medium != 'spi_nand'
         shell: bash
         env:
           TARGET_ID: ${{ matrix.id }}
@@ -307,6 +352,14 @@ jobs:
               > "openhd-base-${TARGET_ID}.sha256"
           )
 
+      - name: Package minimal NAND base
+        if: matrix.boot_medium == 'spi_nand'
+        run: |
+          rootfs_dir=$(find output/out -maxdepth 1 -type d -name 'rootfs_*' -print -quit)
+          python3 scripts/package_pico_nand_base.py --root "$rootfs_dir" --images output/image \
+            --board .BoardConfig.mk --output deploy --sdk-commit "$GITHUB_SHA" \
+            --kernel-config sysdrv/source/objs_kernel/.config
+
       - name: Upload base image
         if: matrix.kind == 'image'
         uses: actions/upload-artifact@v4
@@ -314,6 +367,8 @@ jobs:
           name: openhd-base-${{ matrix.id }}
           path: |
             deploy/openhd-base-${{ matrix.id }}.img.xz
+            deploy/openhd-base-${{ matrix.id }}-firmware.zip
+            deploy/openhd-base-${{ matrix.id }}.rootfs.tar.xz
             deploy/openhd-base-${{ matrix.id }}.json
             deploy/openhd-base-${{ matrix.id }}.sha256
             deploy/firmware.zip

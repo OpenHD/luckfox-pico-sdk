@@ -24,15 +24,16 @@ components = module('record_pico_components')
 
 
 class PicoImageTest(unittest.TestCase):
-    def test_matrix_contains_all_six_actual_board_configurations(self):
+    def test_matrix_contains_all_seven_actual_board_configurations(self):
         rows = targets.select('all')['include']
-        self.assertEqual(len(rows), 6)
-        self.assertEqual(len({row['id'] for row in rows}), 6)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(len({row['id'] for row in rows}), 7)
         for row in rows:
             board = (REPO / 'project/cfg/BoardConfig_IPC' / row['board_config']).read_text()
             self.assertIn('export RK_BOOT_MEDIUM=' + row['boot_medium'], board)
             self.assertEqual(targets.select(row['id'])['include'], [row])
         self.assertEqual(sum(row['boot_medium'] == 'emmc' for row in rows), 3)
+        self.assertEqual(sum(row['boot_medium'] == 'spi_nand' for row in rows), 1)
         with self.assertRaises(ValueError):
             targets.select('aura')
 

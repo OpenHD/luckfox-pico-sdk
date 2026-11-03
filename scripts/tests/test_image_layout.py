@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import re
+import json
 import unittest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -17,8 +18,8 @@ class ImageLayoutTest(unittest.TestCase):
             'BoardConfig-EMMC-Buildroot-RV1106_Luckfox_Pico_Ultra-IPC.mk').read_text()
 
     def test_every_ci_image_board_matches_packaging_layout(self):
-        workflow = (REPO / '.github/workflows/build.yml').read_text()
-        boards = set(re.findall(r'BoardConfig-[A-Za-z0-9_\-]+\.mk', workflow))
+        rows = json.loads((REPO / 'scripts/pico-image-targets.json').read_text())
+        boards = {row['board_config'] for row in rows if row['boot_medium'] != 'spi_nand'}
         self.assertEqual(len(boards), 6)
         for board in sorted(boards):
             with self.subTest(board=board):

@@ -40,5 +40,12 @@
     "board_index": 1,
     "boot_medium": "sd_card",
     "board_config": "BoardConfig-SD_CARD-Buildroot-RV1103_Luckfox_Pico_Mini-IPC.mk"
+  },
+  {
+    "id": "luckfox-pico-mini-nand",
+    "name": "Luckfox Pico Mini B NAND",
+    "board_index": 1,
+    "boot_medium": "spi_nand",
+    "board_config": "BoardConfig-SPI_NAND-Buildroot-RV1103_Luckfox_Pico_Mini_OpenHD-IPC.mk"
   }
 ]

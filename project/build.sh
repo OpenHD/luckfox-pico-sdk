@@ -1908,6 +1908,18 @@ linkdev() {
         case "$bootmedium" in
             emmc) DEVBASE=/dev/mmcblk0 ;;
             sd_card) DEVBASE=/dev/mmcblk1 ;;
+            spi_nand|slc_nand|spi_nor)
+                [ -d /sys/class/mtd ] || return 0
+                mkdir -p /dev/block/by-name
+                for SYS in /sys/class/mtd/mtd[0-9]*; do
+                    [ -r "$SYS/name" ] || continue
+                    INDEX=${SYS##*/mtd}
+                    case "$INDEX" in *[!0-9]*|'') continue ;; esac
+                    NAME=$(cat "$SYS/name")
+                    ln -sf "/dev/mtdblock$INDEX" "/dev/block/by-name/$NAME"
+                done
+                return 0
+                ;;
             *) return 0 ;;
         esac
     fi
@@ -2578,7 +2590,7 @@ function __RUN_POST_BUILD_SCRIPT() {
 	tmp_path=$(realpath $BOARD_CONFIG)
 	tmp_path=$(dirname $tmp_path)
 	if [ -f "$tmp_path/$RK_POST_BUILD_SCRIPT" ]; then
-		$tmp_path/$RK_POST_BUILD_SCRIPT
+		bash "$tmp_path/$RK_POST_BUILD_SCRIPT"
 	fi
 	__RUN_POST_CLEAN_FILES
 }
