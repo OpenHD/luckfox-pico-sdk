@@ -7,6 +7,7 @@ import re
 import subprocess
 
 REQUIRED = (
+    'CONFIG_DEBUG_FS',
     'CONFIG_USB', 'CONFIG_USB_DWC3', 'CONFIG_USB_DWC3_DUAL_ROLE',
     'CONFIG_USB_XHCI_HCD', 'CONFIG_USB_XHCI_PLATFORM',
     'CONFIG_USB_GADGET', 'CONFIG_CONFIGFS_FS', 'CONFIG_USB_CONFIGFS',
@@ -19,7 +20,7 @@ def check(kernel_config, rootfs, dtb=None):
     missing = [symbol for symbol in REQUIRED if symbol + '=y' not in settings]
     if missing:
         raise ValueError('USB maintenance support missing from resolved kernel: ' + ', '.join(missing))
-    for name in ('usr/bin/adbd', 'etc/init.d/S50usbdevice'):
+    for name in ('usr/bin/adbd', 'etc/init.d/S50usbdevice', 'etc/init.d/S25openhd-pico-usb', 'usr/sbin/openhd-pico-usb-role'):
         path = rootfs / name
         if not path.is_file() or not os.access(path, os.X_OK):
             raise ValueError('Missing executable USB maintenance component: ' + name)
@@ -30,8 +31,8 @@ def check(kernel_config, rootfs, dtb=None):
     if dtb is not None:
         mode = subprocess.check_output(
             ['fdtget', str(dtb), '/usbdrd/usb@ffb00000', 'dr_mode'], text=True).strip()
-        if mode != 'host':
-            raise ValueError('USB broadcast radio requires host mode; built DTB uses ' + mode)
+        if mode != 'otg':
+            raise ValueError('Selectable USB host/device roles require OTG; built DTB uses ' + mode)
     print('Verified built-in DWC3 host/device, ADB FunctionFS, RNDIS, executable ADB startup and Ethernet DHCP')
 
 

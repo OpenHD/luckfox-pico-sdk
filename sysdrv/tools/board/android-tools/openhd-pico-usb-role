@@ -1,0 +1,23 @@
+#!/bin/sh
+# The DT stays dual-role; SysUtils selects the user's role before radio detection.
+set -eu
+case "${1:-}" in host|device) role=$1 ;; *) exit 2 ;; esac
+mkdir -p /sys/kernel/debug /run/openhd
+grep -q ' /sys/kernel/debug debugfs ' /proc/mounts || mount -t debugfs debugfs /sys/kernel/debug
+mode=$(find /sys/kernel/debug/usb -name mode 2>/dev/null | head -n 1)
+[ -n "$mode" ] || { echo 'Pico USB role control is unavailable' >&2; exit 1; }
+current=$(cat "$mode")
+if [ "$current" != "$role" ]; then
+    /etc/init.d/S50usbdevice stop 2>/dev/null || true
+    echo "$role" > "$mode"
+    attempts=0
+    while [ "$(cat "$mode")" != "$role" ]; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 30 ] || { echo "Pico USB did not enter $role mode" >&2; exit 1; }
+        sleep 0.1
+    done
+fi
+printf '%s\n' "$role" > /run/openhd/pico-usb-role
+if [ "$role" = device ] && [ "$current" != device ]; then
+    /etc/init.d/S50usbdevice start
+fi

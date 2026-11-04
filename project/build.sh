@@ -2608,6 +2608,12 @@ function post_overlay() {
 				$tmp_path/overlay/$overlay_dir/* $RK_PROJECT_PACKAGE_ROOTFS_DIR/
 		fi
 	done
+	case "$RK_KERNEL_DTS" in
+	*luckfox-pico*)
+		install -Dm755 "$SDK_ROOT_DIR/sysdrv/tools/board/android-tools/openhd-pico-usb-role" "$RK_PROJECT_PACKAGE_ROOTFS_DIR/usr/sbin/openhd-pico-usb-role"
+		install -Dm755 "$SDK_ROOT_DIR/sysdrv/tools/board/android-tools/S25openhd-pico-usb" "$RK_PROJECT_PACKAGE_ROOTFS_DIR/etc/init.d/S25openhd-pico-usb"
+		;;
+	esac
 }
 
 function __RUN_PRE_BUILD_OEM_SCRIPT() {

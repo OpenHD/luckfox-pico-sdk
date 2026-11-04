@@ -87,6 +87,11 @@ configfs_init()
 	echo "rk3xxx"  > ${USB_STRINGS_DIR}/product
 
 	function_init
+	# Keep the Windows USB Ethernet adapter identity stable across role changes
+	# and reboots. Both addresses are locally administered, unicast and distinct.
+	mac_suffix=$(printf '%s' "$SERIAL" | sha256sum | cut -c1-10 | sed 's/../&:/g;s/:$//')
+	test_write "02:$mac_suffix" "${USB_FUNCTIONS_DIR}/rndis.gs0/dev_addr"
+	test_write "06:$mac_suffix" "${USB_FUNCTIONS_DIR}/rndis.gs0/host_addr"
 
 	mkdir ${USB_CONFIGS_DIR}  -m 0770
 	mkdir ${USB_CONFIGS_DIR}/strings/${USB_ATTRIBUTE}  -m 0770
@@ -402,8 +407,9 @@ start)
 	ifconfig lo up
 	# Host-mode images use this connector for the broadcast radio. Network ADB
 	# remains available; do not bind a FunctionFS/RNDIS gadget to a host port.
-	if [ -r /proc/device-tree/usbdrd/usb@ffb00000/dr_mode ] &&
-	   [ "$(tr -d '\000' < /proc/device-tree/usbdrd/usb@ffb00000/dr_mode)" = host ]; then
+	if { [ -r /run/openhd/pico-usb-role ] && [ "$(cat /run/openhd/pico-usb-role)" = host ]; } ||
+	   { [ -r /proc/device-tree/usbdrd/usb@ffb00000/dr_mode ] &&
+	     [ "$(tr -d '\000' < /proc/device-tree/usbdrd/usb@ffb00000/dr_mode)" = host ]; }; then
 		start-stop-daemon --start --quiet --background --exec /usr/bin/adbd
 		exit $?
 	fi

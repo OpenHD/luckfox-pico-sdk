@@ -5,13 +5,14 @@ import json
 from pathlib import Path
 import tarfile
 import zipfile
-from pico_nand import TARGET, FILES, PARTITIONS, CAPACITY, PAGE, PEB, check_images, check_root, check_boot, digest
+from pico_nand import TARGET, FILES, PARTITIONS, CAPACITY, PAGE, PEB, check_images, check_root, check_boot, digest, make_rootfs
 
 
 def package(root, images, board, output, commit, kernel_config):
     check_root(root)
     check_images(images)
     check_boot(images / 'boot.img')
+    make_rootfs(root, images / 'rootfs.img')
     config = kernel_config.read_text().splitlines()
     for flag in ('MTD_SPI_NAND', 'SPI_ROCKCHIP_SFC', 'MTD_UBI', 'UBIFS_FS'):
         if 'CONFIG_' + flag + '=y' not in config:
@@ -36,7 +37,8 @@ def package(root, images, board, output, commit, kernel_config):
         name='Luckfox Pico Mini B NAND', boot_medium='spi_nand', board_config=board.resolve().name,
         architecture='arm', runtime_abi='armv7a-hardfloat-uclibc', sdk_commit=commit,
         image=firmware.name, sha256=digest(firmware), rootfs_seed=seed.name,
-        rootfs_seed_sha256=digest(seed), usb_role='host', application_slots=False,
+        rootfs_seed_sha256=digest(seed), usb_role='host', usb_role_switching=True,
+        provisioning='ubi-static-rootfs-v1', application_slots=False,
         openhd_preinstalled=False, nand_capacity=CAPACITY, nand_page_size=PAGE,
         nand_eraseblock_size=PEB, partitions={n: dict(offset=o, size=s) for n, (o, s) in PARTITIONS.items()},
         board_files={name: digest(images / name) for name in FILES if name != 'rootfs.img'})

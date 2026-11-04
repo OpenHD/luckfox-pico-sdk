@@ -1,0 +1,5 @@
+#!/bin/sh
+[ "$1" = start ] || exit 0
+# Start as a radio host. SysUtils imports ImageWriter settings and switches to
+# USB Ethernet when selected, before detecting Wi-Fi or starting OpenHD.
+/usr/sbin/openhd-pico-usb-role host

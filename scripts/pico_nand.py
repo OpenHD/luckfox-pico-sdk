@@ -3,16 +3,19 @@ import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
 import zipfile
+import zlib
 
 TARGET = 'luckfox-pico-mini-nand'
 CAPACITY = 128 << 20
 PAGE = 2048
 PEB = 128 << 10
 LEB = PEB - 2 * PAGE
+PROVISION_LEBS = 2
 PARTITIONS = {
     'env': (0, 256 << 10), 'idblock': (256 << 10, 256 << 10),
     'uboot': (512 << 10, 512 << 10), 'boot': (1 << 20, 8 << 20),
@@ -44,11 +47,22 @@ def check_images(images):
         if magic != b'UBI#':
             raise ValueError('NAND filesystem is not a UBI image: ' + name)
         # Reserve physical eraseblocks for UBI metadata and bad-block handling.
-        if p.stat().st_size > PARTITIONS[name][1] - 24 * PEB:
+        allocated = p.stat().st_size
+        with p.open('rb') as stream:
+            while allocated >= PEB:
+                stream.seek(allocated - PEB)
+                if stream.read(PEB) != b'\xff' * PEB:
+                    break
+                allocated -= PEB
+        if allocated > PARTITIONS[name][1] - 24 * PEB:
             raise ValueError('NAND image leaves insufficient UBI reserve: ' + name)
 
 
 def check_root(root, applications=False):
+    for name in ('usr/sbin/openhd-pico-usb-role', 'etc/init.d/S25openhd-pico-usb'):
+        path = root / name
+        if not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError('Missing selectable Pico USB role startup: ' + name)
     if list(root.rglob('libgst*.so*')) or list(root.glob('usr/bin/python*')):
         raise ValueError('Minimal NAND filesystem must not contain GStreamer or Python')
     if (root / 'etc/init.d/S97openhd-slots').exists() or (root / 'usr/sbin/openhd-pico-update').exists():
@@ -67,8 +81,8 @@ def check_boot(image):
         subprocess.run(['dumpimage', '-T', 'flat_dt', '-p', '0', '-o', str(dtb), str(image)], check=True)
         mode = subprocess.check_output(['fdtget', '-t', 's', str(dtb),
             '/usbdrd/usb@ffb00000', 'dr_mode'], text=True).strip()
-        if mode != 'host':
-            raise ValueError('NAND boot image must use USB host mode')
+        if mode != 'otg':
+            raise ValueError('NAND boot image must support selectable host/device USB roles')
 
 
 def extract_seed(archive, destination):
@@ -125,10 +139,20 @@ def make_rootfs(root, output):
                         '-e', str(LEB), '-c', str(size // LEB), '-r', str(root),
                         '-o', str(ubifs)], check=True)
         config = work / 'ubinize.cfg'
+        capsule = work / 'provision.bin'
+        body = struct.pack('>I', 0)
+        capsule.write_bytes(b'OHDCFG1\0' + struct.pack('>II', len(body), zlib.crc32(body)) + body)
+        # Explicit dynamic volume size leaves room for the static configuration
+        # volume and 24 eraseblocks of UBI metadata/bad-block reserve.
+        root_lebs = size // PEB - 24 - PROVISION_LEBS
         config.write_text('[rootfs]\nmode=ubi\nimage=' + str(ubifs) +
-                          '\nvol_id=0\nvol_type=dynamic\nvol_name=rootfs\nvol_flags=autoresize\n')
+                          '\nvol_id=0\nvol_type=dynamic\nvol_name=rootfs\nvol_flags=autoresize\nvol_size=' + str(root_lebs * LEB) +
+                          '\n[provision]\nmode=ubi\nimage=' + str(capsule) +
+                          '\nvol_id=1\nvol_type=static\nvol_name=openhd-provision\nvol_size=' + str(PROVISION_LEBS * LEB) + '\n')
         subprocess.run(['ubinize', '-o', str(output), '-m', str(PAGE),
                         '-p', str(PEB), str(config)], check=True)
+        with output.open('ab') as stream:
+            stream.write(b'\xff' * (size - output.stat().st_size))
 
 
 def package_firmware(images, output, tools):

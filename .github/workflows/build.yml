@@ -65,7 +65,7 @@ jobs:
             autoconf bash bc bison build-essential ca-certificates cmake cpio \
             device-tree-compiler dosfstools expect fakeroot file flex g++ \
             g++-multilib gawk gcc gcc-multilib genimage git gperf libncurses5-dev \
-            libssl-dev make module-assistant mtools openssh-client openssl passwd \
+            libssl-dev make module-assistant mtd-utils mtools openssh-client openssl passwd \
             pipx pkg-config python-is-python3 rsync ssh sudo texinfo u-boot-tools unzip vim \
             wget xz-utils
           echo "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/github-actions
@@ -340,6 +340,7 @@ jobs:
             "compressed_size": ${compressed_size},
             "sha256": "${compressed_sha256}",
             "usb_role": "host",
+            "usb_role_switching": True,
             "ethernet_mac": "persistent",
             "openhd_preinstalled": false,
             "upgrade_archive": "openhd.tar.gz"

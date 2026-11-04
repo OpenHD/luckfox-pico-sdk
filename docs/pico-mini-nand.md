@@ -3,11 +3,13 @@
 `luckfox-pico-mini-nand` is the 128 MiB Mini **B** NAND target. Mini A has no
 onboard NAND. It is separate from the existing `luckfox-pico-mini` SD target.
 
-The board boots with USB **host** mode for Devourer radios. Supply power through
-the board's supported power input and use a suitable USB host adapter. That
+The board defaults to USB **host** mode for Devourer radios. ImageWriter's
+"Enable Ethernet link over USB" option selects device mode for computer video
+and telemetry. The DT enables dual-role operation; early boot selects host and
+SysUtils applies the provisioned choice before radio detection. Supply power
+through the board's supported input and use a suitable USB host adapter. That
 connector cannot provide USB Ethernet/ADB while it is a radio host. UART and
-MaskROM remain recovery paths. The host firmware deliberately does not force
-device mode at startup.
+MaskROM remain recovery paths. The role helper verifies the selected role.
 
 The minimal Buildroot profile omits GStreamer, Python, samples, GDB and
 application update slots. A current paired OpenHD/SysUtils application archive
@@ -19,6 +21,10 @@ The physical partition layout occupies 120 MiB: environment/bootloaders 1 MiB,
 boot 8 MiB, OEM 24 MiB, userdata 8 MiB and rootfs 79 MiB. Eight MiB remains
 unallocated, in addition to UBI's internal metadata/bad-block reserve. OEM and
 userdata are discovered from `/sys/class/mtd`, not GPT, and mounted with UBIFS.
+The rootfs UBI image reserves a separate 248 KiB static `openhd-provision`
+volume for ImageWriter settings. ImageWriter edits only this volume, preserving
+UBIFS/application bytes and both volume tables. SysUtils imports its capsule
+once into `/Config` and persists the Ethernet/USB choice across reboots.
 
 ## Build a reusable base
 

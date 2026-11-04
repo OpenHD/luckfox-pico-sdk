@@ -64,7 +64,7 @@
 /**********USB**********/
 &usbdrd_dwc3 {
 	status = "okay";
-	dr_mode = "host";
+	dr_mode = "otg";
 };
 
 /**********RTC**********/

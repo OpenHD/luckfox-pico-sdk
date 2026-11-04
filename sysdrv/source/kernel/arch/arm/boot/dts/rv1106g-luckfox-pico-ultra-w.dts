@@ -115,7 +115,7 @@
 &usbdrd_dwc3 {
 	status = "okay";
 	// OpenHD broadcast radios require the USB host controller.
-	dr_mode = "host";
+	dr_mode = "otg";
 };
 
 /**********RTC**********/
