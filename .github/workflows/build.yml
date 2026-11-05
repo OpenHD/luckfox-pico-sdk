@@ -340,7 +340,7 @@ jobs:
             "compressed_size": ${compressed_size},
             "sha256": "${compressed_sha256}",
             "usb_role": "host",
-            "usb_role_switching": True,
+            "usb_role_switching": true,
             "ethernet_mac": "persistent",
             "openhd_preinstalled": false,
             "upgrade_archive": "openhd.tar.gz"
