@@ -5,3 +5,4 @@
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/BoardConfig-SPI_NAND-Buildroot-RV1103_Luckfox_Pico_Mini_OpenHD-IPC.mk"
 export LF_ORIGIN_BOARD_CONFIG=BoardConfig-SPI_NAND-Buildroot-RV1106_Luckfox_Pico_Pro_Max_OpenHD-IPC.mk
 export RK_KERNEL_DTS=rv1106g-luckfox-pico-pro-max.dts
+export RK_BOOT_MEDIUM=spi_nand
