@@ -5,10 +5,15 @@ import json
 from pathlib import Path
 import tarfile
 import zipfile
-from pico_nand import TARGET, FILES, PARTITIONS, CAPACITY, PAGE, PEB, check_images, check_root, check_boot, digest, make_rootfs
+from pico_nand import TARGETS, FILES, PARTITIONS, PAGE, PEB, check_images, check_root, check_boot, digest, make_rootfs
 
 
 def package(root, images, board, output, commit, kernel_config):
+    matches = [(target, profile) for target, profile in TARGETS.items()
+               if profile['board'] == board.resolve().name]
+    if len(matches) != 1:
+        raise ValueError('Unsupported OpenHD NAND board profile')
+    target, profile = matches[0]
     check_root(root)
     check_images(images)
     check_boot(images / 'boot.img')
@@ -18,7 +23,7 @@ def package(root, images, board, output, commit, kernel_config):
         if 'CONFIG_' + flag + '=y' not in config:
             raise ValueError('NAND support missing from built kernel: ' + flag)
     output.mkdir(parents=True, exist_ok=True)
-    prefix = 'openhd-base-' + TARGET
+    prefix = 'openhd-base-' + target
     seed = output / (prefix + '.rootfs.tar.xz')
     # devtmpfs supplies /dev at boot; avoid device nodes in the reusable seed.
     def seed_filter(info):
@@ -33,13 +38,13 @@ def package(root, images, board, output, commit, kernel_config):
     with zipfile.ZipFile(firmware, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name in FILES:
             archive.write(images / name, name)
-    manifest = dict(schema=2, type='openhd-base-image', target=TARGET,
-        name='Luckfox Pico Mini B NAND', boot_medium='spi_nand', board_config=board.resolve().name,
+    manifest = dict(schema=2, type='openhd-base-image', target=target,
+        name=profile['name'], boot_medium='spi_nand', board_config=board.resolve().name,
         architecture='arm', runtime_abi='armv7a-hardfloat-uclibc', sdk_commit=commit,
         image=firmware.name, sha256=digest(firmware), rootfs_seed=seed.name,
         rootfs_seed_sha256=digest(seed), usb_role='host', usb_role_switching=True,
         provisioning='ubi-static-rootfs-v1', application_slots=False,
-        openhd_preinstalled=False, nand_capacity=CAPACITY, nand_page_size=PAGE,
+        openhd_preinstalled=False, nand_capacity=profile['capacity'], nand_page_size=PAGE,
         nand_eraseblock_size=PEB, partitions={n: dict(offset=o, size=s) for n, (o, s) in PARTITIONS.items()},
         board_files={name: digest(images / name) for name in FILES if name != 'rootfs.img'})
     metadata = output / (prefix + '.json')

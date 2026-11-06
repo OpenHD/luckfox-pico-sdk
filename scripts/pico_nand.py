@@ -11,6 +11,12 @@ import zipfile
 import zlib
 
 TARGET = 'luckfox-pico-mini-nand'
+TARGETS = {
+    TARGET: dict(name='Luckfox Pico Mini B NAND', capacity=128 << 20,
+                 board='BoardConfig-SPI_NAND-Buildroot-RV1103_Luckfox_Pico_Mini_OpenHD-IPC.mk'),
+    'luckfox-pico-pro-max-nand': dict(name='Luckfox Pico Pro/Max NAND', capacity=256 << 20,
+                 board='BoardConfig-SPI_NAND-Buildroot-RV1106_Luckfox_Pico_Pro_Max_OpenHD-IPC.mk'),
+}
 CAPACITY = 128 << 20
 PAGE = 2048
 PEB = 128 << 10

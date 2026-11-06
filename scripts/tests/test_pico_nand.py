@@ -12,6 +12,20 @@ import pico_nand as nand
 
 
 class NandTest(unittest.TestCase):
+    def test_pro_max_has_its_own_board_and_target(self):
+        import json
+        repo = Path(__file__).resolve().parents[2]
+        target = 'luckfox-pico-pro-max-nand'
+        profile = nand.TARGETS[target]
+        rows = json.loads((repo / 'scripts/pico-image-targets.json').read_text())
+        row = next(row for row in rows if row['id'] == target)
+        self.assertEqual(row['boot_medium'], 'spi_nand')
+        self.assertEqual(row['board_config'], profile['board'])
+        self.assertEqual(profile['capacity'], 256 << 20)
+        board = (repo / 'project/cfg/BoardConfig_IPC' / profile['board']).read_text()
+        self.assertIn('RK_KERNEL_DTS=rv1106g-luckfox-pico-pro-max.dts', board)
+        self.assertIn('Mini_OpenHD-IPC.mk', board)
+
     def test_layout_and_reserved_space(self):
         self.assertEqual(max(o + s for o, s in nand.PARTITIONS.values()), 120 << 20)
         with tempfile.TemporaryDirectory() as directory:
