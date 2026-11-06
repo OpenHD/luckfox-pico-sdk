@@ -20,6 +20,7 @@ fi
 printf '%s\n' "$role" > /run/openhd/pico-usb-role
 # OTG hardware can return to device mode between early host selection and
 # SysUtils. Controller role alone does not mean a gadget has been configured.
-if [ "$role" = device ] && [ ! -s /sys/kernel/config/usb_gadget/rockchip/UDC ]; then
+bound_udc=$(cat /sys/kernel/config/usb_gadget/rockchip/UDC 2>/dev/null || true)
+if [ "$role" = device ] && [ -z "$bound_udc" ]; then
     /etc/init.d/S50usbdevice start
 fi

@@ -15,7 +15,9 @@ class UsbGadgetStartTest(unittest.TestCase):
                 (root / name).mkdir(parents=True)
             (root / 'sys/kernel/debug/usb/controller/mode').write_text('device\n')
             udc = root / 'sys/kernel/config/usb_gadget/rockchip/UDC'
-            udc.write_text('')
+            # An unbound sysfs attribute reads as a newline despite its
+            # nonzero reported file size. Inspect contents, never stat size.
+            udc.write_text('\n')
             (root / 'mounts').write_text('debugfs ' + str(root / 'sys/kernel/debug') + ' debugfs rw 0 0\n')
             log = root / 'calls'
             service = root / 'etc/init.d/S50usbdevice'
