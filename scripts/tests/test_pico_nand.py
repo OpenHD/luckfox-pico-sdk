@@ -4,6 +4,8 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import subprocess
+import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pico_nand as nand
@@ -49,6 +51,35 @@ class NandTest(unittest.TestCase):
                 self.archive(archive, members)
                 with self.assertRaises(ValueError):
                     nand.extract_seed(archive, root / 'out')
+
+    def test_config_symlink_becomes_a_real_persistent_mountpoint(self):
+        repo = Path(__file__).resolve().parents[2]
+        source = (repo / 'project/cfg/BoardConfig_IPC/overlay/overlay-openhd-pico-nand/etc/init.d/S25openhd-nand').read_text()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            userdata = root / 'userdata/Config'; userdata.mkdir(parents=True)
+            (userdata / 'saved.json').write_text('persistent settings')
+            config = root / 'Config'; config.symlink_to('/userdata/Config')
+            commands = root / 'bin'; commands.mkdir()
+            for name, content in {
+                'mountpoint': '#!/bin/sh\n[ -f "$TEST_ROOT/mounted" ]\n',
+                'mount': '#!/bin/sh\nprintf "%s\\n" "$*" > "$TEST_ROOT/mounted"\n'
+            }.items():
+                path = commands / name; path.write_text(content); path.chmod(0o755)
+            script = root / 'start.sh'
+            # Execute the production shell logic against an isolated filesystem.
+            source = source.replace('/userdata/Config', '@@USER_CONFIG@@').replace('/Config', str(config)).replace('@@USER_CONFIG@@', str(userdata))
+            source = source.replace('/tmp/Videos', str(root / 'Videos')).replace('/var/log', str(root / 'log'))
+            script.write_text(source)
+            env = dict(os.environ, TEST_ROOT=str(root), PATH=str(commands) + ':' + os.environ['PATH'])
+            # The relocated expected link target follows the same rewrite.
+            config.unlink(); config.symlink_to(userdata)
+            for _ in range(2):
+                subprocess.run(['sh', str(script), 'start'], env=env, check=True)
+            self.assertTrue(config.is_dir())
+            self.assertFalse(config.is_symlink())
+            self.assertIn('--bind', (root / 'mounted').read_text())
+            self.assertEqual((userdata / 'saved.json').read_text(), 'persistent settings')
 
     def test_profile_is_native_minimal_and_does_not_change_sd_mini(self):
         repo = Path(__file__).resolve().parents[2]

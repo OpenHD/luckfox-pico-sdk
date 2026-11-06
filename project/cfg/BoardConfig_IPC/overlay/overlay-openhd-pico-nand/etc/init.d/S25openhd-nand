@@ -1,3 +1,15 @@
 #!/bin/sh
 [ "$1" = start ] || exit 0
+set -eu
 mkdir -p /userdata/Config /tmp/Videos /var/log
+# Provisioning rejects symlink destinations. Keep configuration persistent on
+# userdata, but expose a real directory before SysUtils imports the capsule.
+if [ -L /Config ]; then
+    [ "$(readlink /Config)" = /userdata/Config ] || {
+        echo "Unexpected NAND /Config link; refusing to replace it" >&2
+        exit 1
+    }
+    rm /Config
+fi
+mkdir -p /Config
+mountpoint -q /Config || mount --bind /userdata/Config /Config
