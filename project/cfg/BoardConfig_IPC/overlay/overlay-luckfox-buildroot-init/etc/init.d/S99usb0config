@@ -1,6 +1,6 @@
 #!/bin/sh
 # Match the OpenHD USB maintenance network when the port is in gadget mode.
-TARGET_IP="192.168.7.2"
+TARGET_IP="192.168.3.1"
 USB_MODE_PATH="/proc/device-tree/usbdrd/usb@ffb00000/dr_mode"
 
 usb0_config() {
