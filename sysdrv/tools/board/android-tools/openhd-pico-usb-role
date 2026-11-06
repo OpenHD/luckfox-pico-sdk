@@ -7,7 +7,8 @@ grep -q ' /sys/kernel/debug debugfs ' /proc/mounts || mount -t debugfs debugfs /
 mode=$(find /sys/kernel/debug/usb -name mode 2>/dev/null | head -n 1)
 [ -n "$mode" ] || { echo 'Pico USB role control is unavailable' >&2; exit 1; }
 current=$(cat "$mode")
-if [ "$current" != "$role" ]; then
+udc=$(ls /sys/class/udc 2>/dev/null | head -n 1)
+if [ "$current" != "$role" ] || { [ "$role" = device ] && [ -z "$udc" ]; }; then
     /etc/init.d/S50usbdevice stop 2>/dev/null || true
     echo "$role" > "$mode"
     attempts=0
@@ -17,10 +18,21 @@ if [ "$current" != "$role" ]; then
         sleep 0.1
     done
 fi
+if [ "$role" = device ]; then
+    attempts=0
+    while [ -z "$(ls /sys/class/udc 2>/dev/null | head -n 1)" ]; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 50 ] || { echo 'Pico USB device controller did not register' >&2; exit 1; }
+        sleep 0.1
+    done
+fi
 printf '%s\n' "$role" > /run/openhd/pico-usb-role
 # OTG hardware can return to device mode between early host selection and
 # SysUtils. Controller role alone does not mean a gadget has been configured.
 bound_udc=$(cat /sys/kernel/config/usb_gadget/rockchip/UDC 2>/dev/null || true)
 if [ "$role" = device ] && [ -z "$bound_udc" ]; then
+    # Early host startup launches network-only adbd. It must reopen FunctionFS
+    # after that mount exists, or binding the composite gadget returns ENODEV.
+    /etc/init.d/S50usbdevice stop 2>/dev/null || true
     /etc/init.d/S50usbdevice start
 fi
